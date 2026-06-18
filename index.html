@@ -865,10 +865,8 @@ async function syncAll() {
     const data = await apiFetch({ action: "getAll" });
     if (data.error) throw new Error(data.error);
 
-    // matches
     state.matches = data.matches || [];
 
-    // results → indexado por partido_id
     state.results = {};
     (data.results || []).forEach(r => {
       state.results[r.partido_id] = {
@@ -877,10 +875,8 @@ async function syncAll() {
       };
     });
 
-    // players
     state.players = data.players || [];
 
-    // picks remotos → merge con locales
     const allPicks = await apiFetch({ action: "getPicks" });
     (allPicks || []).forEach(p => {
       const key = `${p.jugador}|${p.partido_id}`;
@@ -893,8 +889,7 @@ async function syncAll() {
       }
     });
 
-    // Si hay partidos nuevos sin pick en una fase marcada como enviada → limpiar el flag
-    // Esto evita que un partido cargado después quede bloqueado por un envío anterior
+    // Limpiar flag sent si hay partidos nuevos sin pick en esa fase
     if (state.sent) {
       PHASES.forEach(ph => {
         PLAYERS.forEach(name => {
@@ -905,9 +900,7 @@ async function syncAll() {
             const pick = state.picks[`${name}|${m.id}`];
             return !pick || !pick.ganador;
           });
-          if (hasNewMatch) {
-            delete state.sent[sentKey];
-          }
+          if (hasNewMatch) delete state.sent[sentKey];
         });
       });
       saveLocal();
@@ -916,9 +909,12 @@ async function syncAll() {
     renderAll();
     toast("✓ Datos sincronizados");
   } catch(e) {
-    toast("Error al sincronizar: " + e.message);
+    console.error("syncAll error:", e);
+    toast("Sin conexión — trabajando con datos locales");
+    renderAll(); // igual renderiza con lo que hay en local
+  } finally {
+    showLoader(false); // siempre cierra el loader, pase lo que pase
   }
-  showLoader(false);
 }
 
 // ── RENDERS ───────────────────────────────────────────────────
@@ -1091,7 +1087,6 @@ function renderQuiniela() {
         : `<div style="font-size:11px;margin-top:6px;opacity:.7;">Los partidos ya iniciaron — no se puede modificar</div>`
       }
     </div>`;
-  }
   }
 
   body.innerHTML = html;
