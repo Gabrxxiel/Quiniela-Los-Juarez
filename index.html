@@ -642,11 +642,12 @@
 const API = "https://script.google.com/macros/s/AKfycbw8_9m4dYRdBOCIwmaIyxFlD-essDWqyiOFs0ukNR-CT0gHs_0WMQk9tEVEbyqpv1Ttcw/exec";
 
 const PHASES = [
-  { id:"r16",   label:"16vos",     cost:2.50  },
-  { id:"qf",    label:"Cuartos",   cost:5.00  },
-  { id:"sf",    label:"Semis",     cost:15.00 },
-  { id:"f3",    label:"3er lugar", cost:15.00 },
-  { id:"final", label:"Final",     cost:25.00 },
+  { id:"r16",   label:"16avos",    cost:2.50,  partidos:16 },
+  { id:"r8",    label:"Octavos",   cost:5.00,  partidos:8  },
+  { id:"qf",    label:"Cuartos",   cost:7.50,  partidos:4  },
+  { id:"sf",    label:"Semis",     cost:15.00, partidos:2  },
+  { id:"f3",    label:"3er lugar", cost:15.00, partidos:1  },
+  { id:"final", label:"Final",     cost:25.00, partidos:1  },
 ];
 
 const PLAYERS = [
@@ -896,78 +897,81 @@ function renderQuiniela() {
 function renderLeaderboard() {
   const phase = PHASES.find(p => p.id === state.activePhase);
 
-  // ── Bote total acumulado (todas las fases jugadas)
-  // Contar cuántas fases tienen al menos un resultado
-  const phasesPlayed = PHASES.filter(ph =>
-    state.matches.some(m => String(m.fase) === ph.id && state.results[m.id])
-  );
-  const totalPool = phasesPlayed.reduce((sum, ph) => sum + PLAYERS.length * ph.cost, 0);
+  // Bote real = partidos con resultado × costo_por_partido × jugadores
+  const matchesWithResult = state.matches.filter(m => state.results[m.id]);
+  const totalPool = matchesWithResult.reduce((sum, m) => {
+    const ph = PHASES.find(p => p.id === String(m.fase));
+    return sum + (ph ? ph.cost * PLAYERS.length : 0);
+  }, 0);
 
   // Bote de la fase activa
-  const activePool = PLAYERS.length * (phase ? phase.cost : 2.5);
+  const phaseMatches = state.matches.filter(m => String(m.fase) === (phase?.id));
+  const activePool   = phaseMatches.length * (phase?.cost || 0) * PLAYERS.length;
 
   document.getElementById("pool-amt").textContent   = `Q${totalPool.toFixed(2)}`;
   document.getElementById("pool-phase").textContent = phase ? phase.label : "—";
-  document.getElementById("pool-cost").textContent  = phase ? `Q${phase.cost.toFixed(2)} por jugador` : "";
+  document.getElementById("pool-cost").textContent  = phase ? `Q${phase.cost.toFixed(2)} por partido` : "";
   document.getElementById("pool-sub").textContent   = `${PLAYERS.length} jugadores`;
 
-  // ── Cards resumen por fase
+  // Cards resumen por fase
   const phaseSummary = document.getElementById("phase-summary");
   phaseSummary.innerHTML = `<div class="card-title">Resumen por fase</div>
   <div class="phase-summary-grid">
     ${PHASES.map(ph => {
-      const phMatches   = state.matches.filter(m => String(m.fase) === ph.id);
-      const phWithRes   = phMatches.filter(m => state.results[m.id]);
-      const phPool      = PLAYERS.length * ph.cost;
-      const isActive    = ph.id === state.activePhase;
-      const isDone      = phWithRes.length > 0 && phWithRes.length === phMatches.length && phMatches.length > 0;
+      const phMatches  = state.matches.filter(m => String(m.fase) === ph.id);
+      const phWithRes  = phMatches.filter(m => state.results[m.id]);
+      const phPool     = phMatches.length * ph.cost * PLAYERS.length;
+      const isActive   = ph.id === state.activePhase;
       return `<div class="phase-sum-card ${isActive ? "active-phase" : ""}">
         <div class="psf-label">${ph.label}</div>
-        <div class="psf-cost">Q${ph.cost.toFixed(2)}</div>
+        <div class="psf-cost">Q${ph.cost.toFixed(2)}/partido</div>
         <div class="psf-pool">Bote Q${phPool.toFixed(2)}</div>
-        <div class="psf-done">${phWithRes.length > 0 ? `${phWithRes.length}/${phMatches.length} resultados` : phMatches.length > 0 ? `${phMatches.length} partidos` : "Sin partidos"}</div>
+        <div class="psf-done">${
+          phWithRes.length > 0
+            ? `${phWithRes.length}/${phMatches.length} jugados`
+            : phMatches.length > 0
+              ? `${phMatches.length} cargados`
+              : "Sin partidos"
+        }</div>
       </div>`;
     }).join("")}
   </div>`;
 
-  // ── Calcular puntos acumulados de TODAS las fases (no solo la activa)
+  // Calcular puntos y pagado por jugador
+  // Pagado = partidos CON RESULTADO en los que el jugador envió pick × costo del partido
   const board = PLAYERS.map(name => {
-    let ptsTotal = 0, exactosTotal = 0, ganadoresTotal = 0;
-    let ptsActiveFase = 0;
+    let ptsTotal = 0, exactosTotal = 0, ganadoresTotal = 0, pagadoTotal = 0;
 
     PHASES.forEach(ph => {
       const phMatches = state.matches.filter(m => String(m.fase) === ph.id);
       phMatches.forEach(m => {
         const res = state.results[m.id];
-        if (!res) return;
-        const key  = `${name}|${m.id}`;
+        const key = `${name}|${m.id}`;
         const pick = state.picks[key];
-        if (!pick || !pick.ganador) return;
+
+        // Solo cuenta como pagado si hay resultado (el partido se jugó)
+        if (res) pagadoTotal += ph.cost;
+
+        if (!res || !pick || !pick.ganador) return;
 
         const rWinner = res.goles_local > res.goles_visitante ? "home"
                       : res.goles_visitante > res.goles_local ? "away" : "draw";
         const correct = pick.ganador === rWinner;
-        const exact   = Number(pick.goles_local) === Number(res.goles_local) &&
+        const exact   = Number(pick.goles_local)     === Number(res.goles_local) &&
                         Number(pick.goles_visitante) === Number(res.goles_visitante);
-        const pts = exact ? ph.cost * 2 : correct ? ph.cost : 0;
 
-        ptsTotal += pts;
-        if (exact)   exactosTotal++;
-        if (correct) ganadoresTotal++;
-        if (ph.id === state.activePhase) ptsActiveFase += pts;
+        if (exact)        { ptsTotal += ph.cost * 2; exactosTotal++;   }
+        else if (correct) { ptsTotal += ph.cost;     ganadoresTotal++; }
       });
     });
 
-    // Ganancia neta = lo que ganó - lo pagado en fases jugadas
-    const pagado = phasesPlayed.reduce((s, ph) => s + ph.cost, 0);
-    const ganancia = ptsTotal - pagado;
-
-    return { name, ptsTotal, exactosTotal, ganadoresTotal, ganancia, ptsActiveFase };
+    const ganancia = Math.round((ptsTotal - pagadoTotal) * 100) / 100;
+    return { name, ptsTotal, exactosTotal, ganadoresTotal, pagadoTotal, ganancia };
   }).sort((a, b) => b.ptsTotal - a.ptsTotal || b.exactosTotal - a.exactosTotal);
 
   const medals = ["🥇","🥈","🥉"];
   document.getElementById("lb-body").innerHTML = board.map((p, i) => {
-    const medal = medals[i] || `<span style="color:var(--text-3);font-size:12px;">${i+1}</span>`;
+    const medal  = medals[i] || `<span style="color:var(--text-3);font-size:12px;">${i+1}</span>`;
     const ganCls = p.ganancia > 0 ? "gana-pos" : p.ganancia < 0 ? "gana-neg" : "gana-neu";
     const ganStr = p.ganancia > 0 ? `+Q${p.ganancia.toFixed(2)}`
                  : p.ganancia < 0 ? `-Q${Math.abs(p.ganancia).toFixed(2)}`
