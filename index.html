@@ -498,6 +498,21 @@
   .stat-cell { text-align: center; font-size: 13px; }
   .gana-cell { text-align: right; font-size: 13px; font-weight: 700; white-space: nowrap; }
 
+  .btn-match-confirm {
+    width: 100%; margin-top: 10px; padding: 9px;
+    background: var(--green); color: #fff; border: none;
+    border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .btn-match-confirm:hover { opacity: .88; }
+  .btn-match-edit {
+    width: 100%; margin-top: 8px; padding: 8px;
+    background: none; color: var(--green-dark);
+    border: 1px solid var(--green); border-radius: var(--radius-sm);
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
+  }
+  .btn-match-edit:hover { background: var(--green-light); }
+
   /* ── INSTRUCCIONES ── */
   .instr-step {
     display: flex; gap: 14px; align-items: flex-start;
@@ -970,9 +985,16 @@ function renderQuiniela() {
     const pick    = state.picks[key] || {};
     const res     = state.results[m.id];
     const started = matchStarted(m);
-    const locked  = !!res || started;   // bloqueado si ya empezó O ya tiene resultado
+    const sentMatchKey = `sentmatch|${pid}|${m.id}`;
+    const matchSent = !!state.sent?.[sentMatchKey];
+    const editingKey = `editing|${pid}|${m.id}`;
+    const isEditing = !!state.sent?.[editingKey];
 
-    // Determinar ganador automático desde el marcador
+    // Bloqueado definitivamente: ya empezó o tiene resultado oficial
+    const hardLocked = !!res || started;
+    // Bloqueado visualmente: ya envió este partido y no está en modo edición
+    const locked = hardLocked || (matchSent && !isEditing);
+
     const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? parseInt(pick.goles_local) : null;
     const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? parseInt(pick.goles_visitante) : null;
     const autoWinner = (gl !== null && ga !== null)
@@ -983,7 +1005,6 @@ function renderQuiniela() {
     const selDraw = autoWinner === "draw" ? "sel-draw" : "";
     const selAway = autoWinner === "away" ? "sel-away" : "";
 
-    // Etiqueta del resultado auto-detectado
     let autoLabel = "";
     if (!locked && autoWinner) {
       if (autoWinner === "home")      autoLabel = `<span class="auto-tag home">→ Gana ${shortName(m.local)}</span>`;
@@ -998,21 +1019,23 @@ function renderQuiniela() {
       resultPill = `<div class="result-pill ${cls}">${info.icon} ${info.label} · Resultado oficial: ${res.goles_local}–${res.goles_visitante}</div>`;
     }
 
-    // Badge de estado del partido
+    // Badge estado
     let statusBadge;
     if (res) {
       statusBadge = `<span class="locked-badge">🔒 Resultado oficial</span>`;
     } else if (started) {
       statusBadge = `<span class="locked-badge" style="background:var(--red-light);color:var(--red);border-color:var(--red);">🔴 En juego</span>`;
-    } else if (alreadySent && pick.ganador) {
-      statusBadge = `<span class="locked-badge sent-badge">✅ Enviado</span>`;
+    } else if (matchSent && !isEditing) {
+      statusBadge = `<span class="locked-badge sent-badge">✅ Confirmado</span>`;
+    } else if (isEditing) {
+      statusBadge = `<span class="locked-badge" style="background:#FAEEDA;color:#633806;border-color:#BA7517;">✏️ Editando</span>`;
     } else {
       statusBadge = `<span style="font-size:10px;color:var(--green);font-weight:600;">Q${phase.cost.toFixed(2)} · ${phase.label}</span>`;
     }
 
-    // Tiempo restante si no ha empezado
+    // Countdown
     let countdownHtml = "";
-    if (!locked) {
+    if (!hardLocked) {
       try {
         const fecha = String(m.fecha).split("T")[0];
         const hora  = fmtHora(m.hora);
@@ -1021,14 +1044,24 @@ function renderQuiniela() {
         if (diff > 0) {
           const hh = Math.floor(diff / 3600000);
           const mm = Math.floor((diff % 3600000) / 60000);
-          if (hh < 24) {
-            countdownHtml = `<div style="font-size:11px;color:var(--text-3);margin-top:4px;">⏱ Cierra en ${hh > 0 ? hh+"h " : ""}${mm}min</div>`;
-          }
+          if (hh < 24) countdownHtml = `<div style="font-size:11px;color:var(--text-3);margin-top:4px;">⏱ Cierra en ${hh > 0 ? hh+"h " : ""}${mm}min</div>`;
         }
       } catch(e) {}
     }
 
-    html += `<div class="match-card ${locked && !res ? "card-sent" : ""}">
+    // Botón por partido
+    let matchBtn = "";
+    if (!hardLocked) {
+      if (!matchSent || isEditing) {
+        // Puede confirmar
+        matchBtn = `<button class="btn-match-confirm" onclick="savePickSingle('${pid}','${m.id}')">✓ Confirmar predicción</button>`;
+      } else {
+        // Ya confirmó, puede editar
+        matchBtn = `<button class="btn-match-edit" onclick="editPickSingle('${pid}','${m.id}')">✏️ Cambiar predicción</button>`;
+      }
+    }
+
+    html += `<div class="match-card ${matchSent && !isEditing && !res ? "card-sent" : ""}">
       <div class="match-meta">
         <span>📅 ${fmtFecha(m.fecha)} &nbsp;🕐 ${fmtHora(m.hora)}</span>
         ${statusBadge}
@@ -1038,8 +1071,6 @@ function renderQuiniela() {
         <span class="vs-badge">vs</span>
         <span class="team right">${m.visitante}</span>
       </div>
-
-      <!-- MARCADOR ARRIBA -->
       <div class="score-block">
         <div class="score-team">${m.local}</div>
         <div class="score-center">
@@ -1055,8 +1086,6 @@ function renderQuiniela() {
         </div>
         <div class="score-team right">${m.visitante}</div>
       </div>
-
-      <!-- BOTONES GANADOR -->
       <div class="win-row">
         <div class="win-btn-auto ${selHome}"><span>${shortName(m.local)}</span></div>
         <div class="win-btn-auto ${selDraw}"><span>Empate</span></div>
@@ -1065,29 +1094,9 @@ function renderQuiniela() {
       ${autoLabel}
       ${countdownHtml}
       ${resultPill}
+      ${matchBtn}
     </div>`;
   });
-
-  // Hay partidos sin resultado y sin iniciar donde aún se puede editar
-  const editableMatches = matches.filter(m => !state.results[m.id] && !matchStarted(m));
-  const anyStarted      = matches.some(m => matchStarted(m) && !state.results[m.id]);
-
-  if (!alreadySent) {
-    if (editableMatches.length > 0) {
-      html += `<button class="btn-green" onclick="savePicks()">💾 Guardar mi quiniela en Sheets</button>`;
-    } else if (anyStarted) {
-      html += `<div class="sent-notice" style="background:var(--red-light);color:var(--red);">🔴 Los partidos ya iniciaron — no podés guardar más predicciones</div>`;
-    }
-  } else {
-    const canUnlock = editableMatches.length > 0;
-    html += `<div class="sent-notice">
-      ✅ Quiniela enviada
-      ${canUnlock
-        ? `<button onclick="resetSent('${pid}')" style="display:block;margin:8px auto 0;background:none;border:1px solid var(--green-dark);color:var(--green-dark);padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;">↺ Corregir mi quiniela</button>`
-        : `<div style="font-size:11px;margin-top:6px;opacity:.7;">Los partidos ya iniciaron — no se puede modificar</div>`
-      }
-    </div>`;
-  }
 
   body.innerHTML = html;
 }
@@ -1331,9 +1340,48 @@ function matchStarted(m) {
 }
 
 function resetSent(pid) {
-  if (!confirm("¿Seguro que querés editar tu quiniela? Deberás volver a guardarla.")) return;
-  const key = `sent|${pid}|${state.activePhase}`;
-  if (state.sent) delete state.sent[key];
+  if (!confirm("¿Seguro que querés editar tu quiniela?")) return;
+  const sentKey = `sent|${pid}|${state.activePhase}`;
+  if (state.sent) delete state.sent[sentKey];
+  saveLocal();
+  renderQuiniela();
+}
+
+async function savePickSingle(pid, mid) {
+  const pick = state.picks[`${pid}|${mid}`];
+  if (!pick || !pick.ganador) { toast("Ingresá el marcador primero"); return; }
+
+  const m = state.matches.find(x => x.id === mid);
+  if (!m) return;
+
+  const res = await apiPost({
+    action: "savePick",
+    jugador: pid,
+    partido_id: mid,
+    local: m.local,
+    visitante: m.visitante,
+    ganador: pick.ganador,
+    goles_local:     pick.goles_local !== undefined ? pick.goles_local : "",
+    goles_visitante: pick.goles_visitante !== undefined ? pick.goles_visitante : "",
+    fase: m.fase,
+  });
+
+  if (res.ok) {
+    if (!state.sent) state.sent = {};
+    // Marcar este partido como enviado y salir de modo edición
+    state.sent[`sentmatch|${pid}|${mid}`] = true;
+    delete state.sent[`editing|${pid}|${mid}`];
+    saveLocal();
+    renderQuiniela();
+    toast(`✓ Predicción guardada — ${m.local} vs ${m.visitante}`);
+  } else {
+    toast("Error al guardar: " + (res.error || "intentá de nuevo"));
+  }
+}
+
+function editPickSingle(pid, mid) {
+  if (!state.sent) state.sent = {};
+  state.sent[`editing|${pid}|${mid}`] = true;
   saveLocal();
   renderQuiniela();
 }
