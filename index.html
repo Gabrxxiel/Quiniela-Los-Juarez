@@ -594,7 +594,14 @@
   <!-- ══ QUINIELA ══ -->
   <div id="tab-quiniela" class="section">
     <div class="card-title" style="margin-top:.5rem;">¿Quién eres?</div>
-    <div class="p-grid" id="p-grid"></div>
+    <div style="margin-bottom:1.25rem;">
+      <select id="player-select" onchange="selectPlayerDropdown(this.value)"
+        style="width:100%;padding:10px 14px;font-size:15px;font-weight:500;
+               border:1.5px solid var(--border-md);border-radius:var(--radius);
+               background:var(--surface);color:var(--text);cursor:pointer;">
+        <option value="">— Seleccioná tu nombre —</option>
+      </select>
+    </div>
     <div id="quiniela-body"></div>
   </div>
 
@@ -626,6 +633,7 @@
           <tr>
             <th style="width:32px;">#</th>
             <th>Jugador</th>
+            <th style="text-align:right;width:48px;">Pts</th>
             <th style="text-align:right;">Recibido</th>
             <th style="text-align:right;">Ganancia</th>
           </tr>
@@ -633,7 +641,7 @@
         <tbody id="lb-body"></tbody>
       </table>
     </div>
-    <div style="font-size:11px;color:var(--text-3);padding:4px 2px 1rem;">Ganancia = lo recibido en repartos − cuotas pagadas por partidos jugados</div>
+    <div style="font-size:11px;color:var(--text-3);padding:4px 2px 1rem;">Pts: 2 marcador exacto · 1 ganador correcto · Ganancia = recibido − pagado</div>
   </div>
 
   <!-- ══ ADMIN ══ -->
@@ -965,16 +973,21 @@ function renderAll() {
 }
 
 function renderPlayerGrid() {
-  const grid = document.getElementById("p-grid");
-  grid.innerHTML = PLAYERS.map((name, i) => {
-    const pts = getPlayerPts(name);
-    const active = state.selectedPlayer === i ? "active" : "";
-    return `<div class="p-card ${active}" onclick="selectPlayer(${i})">
-      <div class="p-avatar" style="background:${COLORS[i]};">${initials(name)}</div>
-      <div class="p-name">${name}</div>
-      <div class="p-pts">${pts} pts</div>
-    </div>`;
-  }).join("");
+  const sel = document.getElementById("player-select");
+  if (!sel) return;
+  // Conservar selección actual
+  const current = state.selectedPlayer;
+  sel.innerHTML = `<option value="">— Seleccioná tu nombre —</option>` +
+    PLAYERS.map((name, i) => {
+      const pts = calcPlayerScore(name);
+      return `<option value="${i}" ${current === i ? "selected" : ""}>${name}${pts > 0 ? " · " + pts + " pts" : ""}</option>`;
+    }).join("");
+}
+
+function selectPlayerDropdown(val) {
+  state.selectedPlayer = val === "" ? null : parseInt(val);
+  saveLocal();
+  renderQuiniela();
 }
 
 function renderQuiniela() {
@@ -1232,7 +1245,6 @@ function renderLeaderboard() {
   // Tabla ranking
   const board = PLAYERS.map(name => {
     let exactosTotal = 0, ganadoresTotal = 0, pagadoTotal = 0;
-
     PHASES.forEach(ph => {
       state.matches.filter(m => String(m.fase) === ph.id).forEach(m => {
         const res  = state.results[m.id];
@@ -1248,11 +1260,11 @@ function renderLeaderboard() {
         else if (pick.ganador === rWinner) ganadoresTotal++;
       });
     });
-
-    const recibido   = ganancia[name] || 0;
-    const gananciaN  = Math.round((recibido - pagadoTotal) * 100) / 100;
-    return { name, recibido, exactosTotal, ganadoresTotal, pagadoTotal, ganancia: gananciaN };
-  }).sort((a, b) => b.recibido - a.recibido || b.exactosTotal - a.exactosTotal);
+    const recibido  = ganancia[name] || 0;
+    const gananciaN = Math.round((recibido - pagadoTotal) * 100) / 100;
+    const pts       = calcPlayerScore(name);
+    return { name, recibido, exactosTotal, ganadoresTotal, pagadoTotal, ganancia: gananciaN, pts };
+  }).sort((a, b) => b.pts - a.pts || b.recibido - a.recibido);
 
   const medals = ["🥇","🥈","🥉"];
   document.getElementById("lb-body").innerHTML = board.map((p, i) => {
@@ -1264,7 +1276,8 @@ function renderLeaderboard() {
     return `<tr>
       <td style="text-align:center;font-size:14px;">${medal}</td>
       <td style="font-size:13px;font-weight:600;">${p.name}</td>
-      <td style="text-align:right;font-weight:700;font-size:14px;">Q${p.recibido.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:700;font-size:15px;color:var(--green-dark);">${p.pts}</td>
+      <td style="text-align:right;font-weight:600;font-size:13px;">Q${p.recibido.toFixed(2)}</td>
       <td class="gana-cell ${ganCls}">${ganStr}</td>
     </tr>`;
   }).join("");
@@ -1324,6 +1337,13 @@ function renderAdmin() {
   `).join("");
 }
 
+// Llama al Apps Script como proxy para búsquedas web (evita CORS)
+async function claudeSearch(prompt) {
+  const res = await apiPost({ action: "claudeSearch", prompt });
+  if (res.error) throw new Error(res.error);
+  return res.result;
+}
+
 async function fetchMatches() {
   const dateInput = document.getElementById("search-date").value;
   if (!dateInput) { toast("Seleccioná una fecha primero"); return; }
@@ -1341,41 +1361,19 @@ async function fetchMatches() {
   const fechaLegible = `${d}/${m}/${y}`;
   const fase = PHASES.find(p => p.id === state.activePhase);
 
-  const prompt = `Busca los partidos del Mundial FIFA 2026 del día ${fechaLegible}.
-Para cada partido dame: equipos, hora local de Guatemala (UTC-6).
-Responde ÚNICAMENTE con JSON, sin texto extra, sin markdown:
-{"partidos":[{"local":"País A","visitante":"País B","hora":"18:00"},...],"encontrado":true}
-Si no hay partidos ese día: {"partidos":[],"encontrado":false}
-Solo el JSON.`;
-
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 500,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
-
-    const data = await resp.json();
-    const textBlock = data.content?.find(b => b.type === "text");
-    const raw = textBlock?.text?.trim() || "";
-    const clean = raw.replace(/```json|```/g, "").trim();
-    const result = JSON.parse(clean);
+    const raw = await claudeSearch(
+      `Partidos del Mundial FIFA 2026 el ${fechaLegible}. Responde SOLO JSON sin markdown: {"partidos":[{"local":"País A","visitante":"País B","hora":"HH:MM"}],"encontrado":true} — hora en Guatemala UTC-6. Si no hay partidos: {"partidos":[],"encontrado":false}`
+    );
+    const result = JSON.parse(raw.replace(/```json|```/g, "").trim());
 
     if (!result.encontrado || result.partidos.length === 0) {
-      status.innerHTML = `<span style="color:var(--gold);">⚠️ No se encontraron partidos para ${fechaLegible}. Verificá la fecha o cargalos manualmente.</span>`;
-      btn.disabled = false;
-      btn.textContent = "🔍 Buscar partidos";
-      return;
+      status.innerHTML = `<span style="color:var(--gold);">⚠️ No se encontraron partidos para ${fechaLegible}.</span>`;
+      btn.disabled = false; btn.textContent = "🔍 Buscar partidos"; return;
     }
 
-    status.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ ${result.partidos.length} partido${result.partidos.length > 1 ? "s" : ""} encontrado${result.partidos.length > 1 ? "s" : ""} para ${fechaLegible}. Confirmá cuáles cargar:</span>`;
+    status.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ ${result.partidos.length} partido${result.partidos.length > 1 ? "s" : ""} encontrado${result.partidos.length > 1 ? "s" : ""} — confirmá cuáles cargar:</span>`;
 
-    // Mostrar lista de partidos encontrados con checkbox para confirmar
     list.innerHTML = result.partidos.map((p, i) => `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--border);">
         <input type="checkbox" id="fm-${i}" checked style="width:18px;height:18px;cursor:pointer;accent-color:var(--green);" />
@@ -1384,95 +1382,53 @@ Solo el JSON.`;
           <div style="font-size:11px;color:var(--text-3);">📅 ${fechaLegible} &nbsp;🕐 ${p.hora} &nbsp;·&nbsp; ${fase?.label || ""} · Q${fase?.cost?.toFixed(2) || "2.50"}</div>
         </div>
       </div>
-    `).join("") + `
-      <button class="btn-green" style="margin-top:12px;" onclick="confirmFoundMatches(${JSON.stringify(result.partidos).replace(/"/g, '&quot;')},'${dateInput}')">
-        ✓ Cargar partidos seleccionados
-      </button>`;
+    `).join("") + `<button class="btn-green" style="margin-top:12px;" onclick="confirmFoundMatches(${JSON.stringify(result.partidos).replace(/"/g, "&quot;")},'${dateInput}')">✓ Cargar partidos seleccionados</button>`;
 
   } catch(e) {
-    status.innerHTML = `<span style="color:var(--red);">✗ Error al buscar: ${e.message}. Cargalos manualmente.</span>`;
+    status.innerHTML = `<span style="color:var(--red);">✗ Error: ${e.message}. Cargalos manualmente.</span>`;
   }
-
-  btn.disabled = false;
-  btn.textContent = "🔍 Buscar partidos";
+  btn.disabled = false; btn.textContent = "🔍 Buscar partidos";
 }
 
 async function confirmFoundMatches(partidos, fecha) {
   const list = document.getElementById("found-matches-list");
   let cargados = 0;
-
   for (let i = 0; i < partidos.length; i++) {
     const chk = document.getElementById(`fm-${i}`);
     if (!chk?.checked) continue;
-
     const p  = partidos[i];
     const id = "m_" + Date.now() + "_" + i;
     const match = { id, fase: state.activePhase, local: p.local, visitante: p.visitante, fecha, hora: p.hora };
-
     const res = await apiPost({ action: "addMatch", ...match });
-    if (res.ok) {
-      state.matches.push(match);
-      cargados++;
-    }
-    // Pequeña pausa para evitar rate limit
+    if (res.ok) { state.matches.push(match); cargados++; }
     await new Promise(r => setTimeout(r, 200));
   }
-
   list.innerHTML = "";
   document.getElementById("search-matches-status").innerHTML = "";
   renderAdmin();
-  toast(`✓ ${cargados} partido${cargados !== 1 ? "s" : ""} cargado${cargados !== 1 ? "s" : ""} correctamente`);
+  toast(`✓ ${cargados} partido${cargados !== 1 ? "s" : ""} cargado${cargados !== 1 ? "s" : ""}`);
 }
 
 async function fetchResult(mid, local, visitante, fecha) {
   const btn    = document.getElementById(`search-btn-${mid}`);
   const status = document.getElementById(`search-status-${mid}`);
-  btn.disabled = true;
-  btn.textContent = "⏳ Buscando...";
-  status.textContent = "";
-
-  const fechaFmt = fmtFecha(fecha);
-  const prompt = `Busca el resultado final del partido de fútbol: "${local} vs ${visitante}" del ${fechaFmt} en el Mundial FIFA 2026.
-Responde ÚNICAMENTE con un JSON así, sin texto extra, sin markdown:
-{"local":0,"visitante":0,"encontrado":true}
-Si no encontrás el resultado responde: {"local":0,"visitante":0,"encontrado":false}
-Solo el JSON, nada más.`;
-
+  btn.disabled = true; btn.textContent = "⏳ Buscando..."; status.textContent = "";
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 100,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [{ role: "user", content: prompt }]
-      })
-    });
-
-    const data = await resp.json();
-
-    // Extraer el texto de la respuesta
-    const textBlock = data.content?.find(b => b.type === "text");
-    const raw = textBlock?.text?.trim() || "";
-
-    // Limpiar y parsear JSON
-    const clean = raw.replace(/```json|```/g, "").trim();
-    const result = JSON.parse(clean);
-
+    const raw = await claudeSearch(
+      `Resultado final del partido "${local} vs ${visitante}" del ${fmtFecha(fecha)} Mundial FIFA 2026. SOLO JSON sin markdown: {"local":0,"visitante":0,"encontrado":true} o {"local":0,"visitante":0,"encontrado":false}`
+    );
+    const result = JSON.parse(raw.replace(/```json|```/g, "").trim());
     if (result.encontrado) {
       document.getElementById(`rh-${mid}`).value = result.local;
       document.getElementById(`ra-${mid}`).value = result.visitante;
-      status.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ Resultado encontrado: ${local} ${result.local} – ${result.visitante} ${visitante}. Confirmá si es correcto.</span>`;
+      status.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ ${local} ${result.local} – ${result.visitante} ${visitante}. Confirmá si es correcto.</span>`;
     } else {
       status.innerHTML = `<span style="color:var(--gold);">⚠️ No se encontró el resultado aún. Ingresalo manualmente.</span>`;
     }
   } catch(e) {
-    status.innerHTML = `<span style="color:var(--red);">✗ Error al buscar. Ingresalo manualmente.</span>`;
+    status.innerHTML = `<span style="color:var(--red);">✗ Error. Ingresalo manualmente.</span>`;
   }
-
-  btn.disabled = false;
-  btn.textContent = "🔍 Buscar resultado";
+  btn.disabled = false; btn.textContent = "🔍 Buscar resultado";
 }
 
 // ── ACTIONS ───────────────────────────────────────────────────
@@ -1703,9 +1659,27 @@ function evalPick(pick, res, cost, mid) {
   };
 }
 
+// Sistema de puntos: 2 = marcador exacto, 1 = ganador correcto, 0 = fallo
+function calcPlayerScore(name) {
+  let pts = 0;
+  state.matches.forEach(m => {
+    const res  = state.results[m.id];
+    const pick = state.picks[`${name}|${m.id}`];
+    if (!res || !pick || !pick.ganador) return;
+    const rWinner = res.goles_local > res.goles_visitante ? "home"
+                  : res.goles_visitante > res.goles_local  ? "away" : "draw";
+    const correct = pick.ganador === rWinner;
+    const exact   = correct &&
+                    Number(pick.goles_local)     === Number(res.goles_local) &&
+                    Number(pick.goles_visitante) === Number(res.goles_visitante);
+    if (exact)        pts += 2;
+    else if (correct) pts += 1;
+  });
+  return pts;
+}
+
 function getPlayerPts(name) {
-  const sp = state.players.find(p => p.nombre === name);
-  return sp ? parseFloat(sp.puntos).toFixed(2) : "0.00";
+  return calcPlayerScore(name);
 }
 
 function fmtFecha(val) {
