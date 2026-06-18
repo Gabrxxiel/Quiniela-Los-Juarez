@@ -1504,29 +1504,38 @@ function fmtFecha(val) {
 
 function fmtHora(val) {
   if (!val) return "—";
-  const s = String(val);
-  // Formato correcto HH:MM
-  if (s.match(/^\d{2}:\d{2}$/)) return s;
-  // ISO string — extraer la hora
+  const s = String(val).trim();
+
+  // Ya viene bien como HH:MM
+  if (s.match(/^\d{1,2}:\d{2}(:\d{2})?$/)) return s.substring(0, 5);
+
+  // ISO string — extraer la parte de hora UTC
   if (s.includes("T")) {
     const t = s.split("T")[1]?.substring(0, 5);
     if (t) return t;
   }
-  // Sheets guarda horas como decimal (fracción del día)
+
+  // Número decimal puro (fracción del día que manda Sheets a veces)
   const n = parseFloat(s);
-  if (!isNaN(n) && n >= 0 && n < 1) {
+  if (!isNaN(n) && n > 0 && n < 1) {
     const totalMin = Math.round(n * 24 * 60);
     const hh = Math.floor(totalMin / 60).toString().padStart(2, "0");
     const mm = (totalMin % 60).toString().padStart(2, "0");
     return `${hh}:${mm}`;
   }
-  // Fecha 1899 de Sheets — extraer hora del objeto Date
+
+  // Objeto Date serializado como string (año 1899 de Sheets)
+  // Sheets codifica hora H como 1899-12-30T{H}:00:00.000Z
+  // Hay que leerlo como UTC para no perder la hora por timezone
   try {
     const d = new Date(val);
     if (!isNaN(d.getTime())) {
-      return d.toLocaleTimeString("es-GT", { hour:"2-digit", minute:"2-digit", hour12:false });
+      const hh = d.getUTCHours().toString().padStart(2, "0");
+      const mm = d.getUTCMinutes().toString().padStart(2, "0");
+      return `${hh}:${mm}`;
     }
   } catch(e) {}
+
   return s;
 }
 
