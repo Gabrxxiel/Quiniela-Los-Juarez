@@ -641,7 +641,7 @@
         <tbody id="lb-body"></tbody>
       </table>
     </div>
-    <div style="font-size:11px;color:var(--text-3);padding:4px 2px 1rem;">Pts: 2 marcador exacto · 1 ganador correcto · Ganancia = recibido − pagado</div>
+    <div style="font-size:11px;color:var(--text-3);padding:4px 2px 1rem;">Pts: 2 marcador exacto · 1 ganador correcto · Ganancia = recibido − cuota de partidos jugados</div>
   </div>
 
   <!-- ══ ADMIN ══ -->
@@ -788,7 +788,7 @@
     <div class="card-title">Ganancia neta</div>
     <div class="card">
       <div style="font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:12px;">
-        Lo que <strong style="color:var(--text);">recibiste</strong> en repartos menos lo que <strong style="color:var(--text);">pagaste</strong> en cuotas por los partidos jugados.
+        Lo que <strong style="color:var(--text);">recibiste</strong> en repartos menos la <strong style="color:var(--text);">cuota de los partidos que jugaste</strong>. Si no enviaste predicción en un partido, ese partido no te descuenta nada.
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div style="background:var(--green-light);border-radius:var(--radius-sm);padding:10px;text-align:center;">
@@ -1244,12 +1244,16 @@ function renderLeaderboard() {
 
   // Tabla ranking
   const board = PLAYERS.map(name => {
-    let exactosTotal = 0, ganadoresTotal = 0, pagadoTotal = 0;
+    let exactosTotal = 0, ganadoresTotal = 0, jugadoTotal = 0, partidosJugados = 0;
     PHASES.forEach(ph => {
       state.matches.filter(m => String(m.fase) === ph.id).forEach(m => {
         const res  = state.results[m.id];
         const pick = state.picks[`${name}|${m.id}`];
-        if (res) pagadoTotal += ph.cost;
+        // Jugado = partido con resultado oficial, sin importar si envió pick
+        if (res) {
+          jugadoTotal += ph.cost;
+          partidosJugados++;
+        }
         if (!res || !pick || !pick.ganador) return;
         const rWinner = res.goles_local > res.goles_visitante ? "home"
                       : res.goles_visitante > res.goles_local ? "away" : "draw";
@@ -1261,9 +1265,9 @@ function renderLeaderboard() {
       });
     });
     const recibido  = ganancia[name] || 0;
-    const gananciaN = Math.round((recibido - pagadoTotal) * 100) / 100;
+    const gananciaN = Math.round((recibido - jugadoTotal) * 100) / 100;
     const pts       = calcPlayerScore(name);
-    return { name, recibido, exactosTotal, ganadoresTotal, pagadoTotal, ganancia: gananciaN, pts };
+    return { name, recibido, exactosTotal, ganadoresTotal, jugadoTotal, partidosJugados, ganancia: gananciaN, pts };
   }).sort((a, b) => b.pts - a.pts || b.recibido - a.recibido);
 
   const medals = ["🥇","🥈","🥉"];
@@ -1275,7 +1279,10 @@ function renderLeaderboard() {
                  : `Q0.00`;
     return `<tr>
       <td style="text-align:center;font-size:14px;">${medal}</td>
-      <td style="font-size:13px;font-weight:600;">${p.name}</td>
+      <td>
+        <div style="font-size:13px;font-weight:600;">${p.name}</div>
+        ${p.partidosJugados > 0 ? `<div style="font-size:10px;color:var(--text-3);">${p.partidosJugados} partido${p.partidosJugados !== 1 ? "s" : ""} jugado${p.partidosJugados !== 1 ? "s" : ""}</div>` : ""}
+      </td>
       <td style="text-align:right;font-weight:700;font-size:15px;color:var(--green-dark);">${p.pts}</td>
       <td style="text-align:right;font-weight:600;font-size:13px;">Q${p.recibido.toFixed(2)}</td>
       <td class="gana-cell ${ganCls}">${ganStr}</td>
