@@ -498,6 +498,15 @@
   .stat-cell { text-align: center; font-size: 13px; }
   .gana-cell { text-align: right; font-size: 13px; font-weight: 700; white-space: nowrap; }
 
+  .btn-search {
+    background: var(--blue-light); color: var(--blue);
+    border: 1px solid var(--blue); border-radius: var(--radius-sm);
+    padding: 5px 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s; white-space: nowrap;
+  }
+  .btn-search:hover { opacity: .8; }
+  .btn-search:disabled { opacity: .5; cursor: not-allowed; }
+
   .btn-match-confirm {
     width: 100%; margin-top: 10px; padding: 9px;
     background: var(--green); color: #fff; border: none;
@@ -574,16 +583,16 @@
 </header>
 
 <nav>
-  <button class="nav-btn active" onclick="showTab('quiniela')">Mi Quiniela</button>
+  <button class="nav-btn active" onclick="showTab('instrucciones')">Inicio</button>
+  <button class="nav-btn" onclick="showTab('quiniela')">Mi Quiniela</button>
   <button class="nav-btn" onclick="showTab('tabla')">Tabla</button>
   <button class="nav-btn" onclick="showTab('admin')">Admin</button>
-  <button class="nav-btn" onclick="showTab('instrucciones')">Instrucciones</button>
 </nav>
 
 <main>
 
   <!-- ══ QUINIELA ══ -->
-  <div id="tab-quiniela" class="section active">
+  <div id="tab-quiniela" class="section">
     <div class="card-title" style="margin-top:.5rem;">¿Quién eres?</div>
     <div class="p-grid" id="p-grid"></div>
     <div id="quiniela-body"></div>
@@ -617,16 +626,14 @@
           <tr>
             <th style="width:32px;">#</th>
             <th>Jugador</th>
-            <th style="text-align:center;width:52px;">✓</th>
-            <th style="text-align:center;width:52px;">⚡</th>
-            <th style="text-align:right;">Pts</th>
-            <th style="text-align:right;">Gana</th>
+            <th style="text-align:right;">Recibido</th>
+            <th style="text-align:right;">Ganancia</th>
           </tr>
         </thead>
         <tbody id="lb-body"></tbody>
       </table>
     </div>
-    <div style="font-size:11px;color:var(--text-3);padding:4px 2px 1rem;">✓ ganadores correctos &nbsp;·&nbsp; ⚡ marcadores exactos &nbsp;·&nbsp; Gana = ganancia neta estimada</div>
+    <div style="font-size:11px;color:var(--text-3);padding:4px 2px 1rem;">Ganancia = lo recibido en repartos − cuotas pagadas por partidos jugados</div>
   </div>
 
   <!-- ══ ADMIN ══ -->
@@ -637,7 +644,26 @@
     </div>
     <div class="card-title">Fase activa</div>
     <div class="phase-row" id="admin-phase-row"></div>
-    <div class="card-title">Agregar partido</div>
+
+    <div class="card-title">Buscar partidos automáticamente</div>
+    <div class="card">
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:12px;">Buscá los partidos del Mundial 2026 para una fecha y los pre-carga automáticamente.</div>
+      <div class="form-grid-2" style="margin-bottom:10px;">
+        <div>
+          <div class="form-label">Fecha a buscar</div>
+          <input class="form-inp" type="date" id="search-date" />
+        </div>
+        <div style="display:flex;align-items:flex-end;">
+          <button class="btn-search" id="btn-search-matches" onclick="fetchMatches()" style="width:100%;padding:9px;font-size:13px;">
+            🔍 Buscar partidos
+          </button>
+        </div>
+      </div>
+      <div id="search-matches-status" style="font-size:12px;color:var(--text-3);min-height:16px;margin-bottom:4px;"></div>
+      <div id="found-matches-list"></div>
+    </div>
+
+    <div class="card-title">Agregar partido manual</div>
     <div class="card">
       <div class="form-grid-3" style="margin-bottom:10px;">
         <div><div class="form-label">Local</div><input class="form-inp" id="f-home" placeholder="Ej. México" /></div>
@@ -657,34 +683,29 @@
   </div>
 
   <!-- ══ INSTRUCCIONES ══ -->
-  <div id="tab-instrucciones" class="section">
+  <!-- ══ INSTRUCCIONES ══ -->
+  <div id="tab-instrucciones" class="section active">
 
-    <div class="card" style="background:var(--green-dark);border-color:var(--green-dark);color:#fff;margin-bottom:1rem;">
-      <div style="font-size:22px;margin-bottom:4px;">⚽ Quiniela Mundial 2026</div>
-      <div style="font-size:13px;opacity:.75;">Guía completa para los 15 participantes</div>
+    <div style="background:var(--green-dark);border-radius:var(--radius);padding:1.25rem;color:#fff;margin-bottom:1rem;text-align:center;">
+      <div style="font-size:36px;margin-bottom:6px;">⚽</div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:4px;">Quiniela Mundial 2026</div>
+      <div style="font-size:13px;opacity:.7;">Guía para los 15 participantes</div>
     </div>
 
-    <div class="card-title">Cómo jugar — paso a paso</div>
+    <div class="card-title">Cómo jugar</div>
     <div class="card" style="padding:.5rem 1rem;">
       <div class="instr-step">
         <div class="instr-num">1</div>
         <div>
           <div class="instr-title">Seleccioná tu nombre</div>
-          <div class="instr-desc">En "Mi Quiniela" tocá tu nombre. Queda resaltado en verde.</div>
+          <div class="instr-desc">En la pestaña "Mi Quiniela" tocá tu nombre. Queda resaltado en verde.</div>
         </div>
       </div>
       <div class="instr-step">
         <div class="instr-num">2</div>
         <div>
-          <div class="instr-title">Elegí la fase activa</div>
-          <div class="instr-desc">Los partidos del día aparecen según la fase que cargó el admin: 16avos, Octavos, Cuartos, Semis o Final.</div>
-        </div>
-      </div>
-      <div class="instr-step">
-        <div class="instr-num">3</div>
-        <div>
-          <div class="instr-title">Ingresá tu marcador predicho</div>
-          <div class="instr-desc">Escribí los goles de cada equipo. El sistema detecta automáticamente si ganó el local, el visitante o hubo empate — el botón se marca solo.</div>
+          <div class="instr-title">Ingresá tu marcador para cada partido</div>
+          <div class="instr-desc">Escribí los goles del local y visitante. El sistema detecta automáticamente el ganador o empate.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
             <span class="itag ig">2:1 → Gana local</span>
             <span class="itag id">1:1 → Empate</span>
@@ -693,17 +714,17 @@
         </div>
       </div>
       <div class="instr-step">
-        <div class="instr-num">4</div>
+        <div class="instr-num">3</div>
         <div>
-          <div class="instr-title">Guardá tu quiniela</div>
-          <div class="instr-desc">Completá todos los partidos y tocá "Guardar mi quiniela en Sheets". <strong style="color:var(--red);">Una vez enviada no se puede modificar.</strong> Hacelo antes de que empiece el primer partido del día.</div>
+          <div class="instr-title">Confirmá cada partido por separado</div>
+          <div class="instr-desc">Cada partido tiene su propio botón <strong style="color:var(--green);">✓ Confirmar predicción</strong>. Podés cambiarla antes de que inicie con <strong style="color:var(--green);">✏️ Cambiar predicción</strong>.</div>
         </div>
       </div>
       <div class="instr-step" style="border-bottom:none;">
-        <div class="instr-num">5</div>
+        <div class="instr-num">4</div>
         <div>
-          <div class="instr-title">Seguí el ranking en "Tabla"</div>
-          <div class="instr-desc">Ahí ves posiciones, cuánto ganó cada uno en cada partido y la ganancia neta acumulada.</div>
+          <div class="instr-title">Una vez iniciado el partido — bloqueado</div>
+          <div class="instr-desc">Cuando llega la hora de inicio aparece <span class="itag ir" style="font-size:11px;">🔴 En juego</span> y ya no se puede modificar la predicción.</div>
         </div>
       </div>
     </div>
@@ -713,10 +734,10 @@
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
         <thead>
           <tr style="border-bottom:0.5px solid var(--border);">
-            <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;">Fase</th>
-            <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;">Partidos</th>
-            <th style="padding:8px 12px;text-align:right;font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;">Cuota</th>
-            <th style="padding:8px 12px;text-align:right;font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;">Bote fase</th>
+            <th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;">Fase</th>
+            <th style="padding:8px 12px;text-align:center;font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;">Partidos</th>
+            <th style="padding:8px 12px;text-align:right;font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;">Cuota</th>
+            <th style="padding:8px 12px;text-align:right;font-size:11px;color:var(--text-3);font-weight:500;text-transform:uppercase;">Bote fase</th>
           </tr>
         </thead>
         <tbody>
@@ -733,52 +754,49 @@
 
     <div class="card-title">Cómo se reparte el bote</div>
     <div class="card">
-      <div style="font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:12px;">
-        Cada partido tiene su propio bote = <strong style="color:var(--text);">cuota × 15 jugadores</strong>. Al conocerse el resultado se reparte así:
-      </div>
+      <div style="font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:12px;">Cada partido tiene su propio bote = <strong style="color:var(--text);">cuota × 15 jugadores</strong>. Al conocerse el resultado:</div>
       <div class="instr-rule">
-        <span class="itag ig" style="font-size:13px;padding:4px 12px;">⚡ Marcador exacto</span>
+        <span class="itag ig" style="font-size:12px;padding:4px 10px;white-space:nowrap;">⚡ Marcador exacto</span>
         <span style="font-size:13px;color:var(--text-2);">El bote se divide entre todos los que acertaron el marcador exacto.</span>
       </div>
       <div class="instr-rule">
-        <span class="itag id" style="font-size:13px;padding:4px 12px;">✓ Ganador correcto</span>
-        <span style="font-size:13px;color:var(--text-2);">Si nadie acertó exacto, el bote se divide entre los que acertaron el ganador.</span>
+        <span class="itag id" style="font-size:12px;padding:4px 10px;white-space:nowrap;">✓ Ganador correcto</span>
+        <span style="font-size:13px;color:var(--text-2);">Si nadie acertó exacto, se divide entre los que acertaron el ganador.</span>
       </div>
       <div class="instr-rule" style="border-bottom:none;">
-        <span class="itag ir" style="font-size:13px;padding:4px 12px;">✗ Nadie acierta</span>
-        <span style="font-size:13px;color:var(--text-2);">El bote de ese partido se acumula al bote de la <strong style="color:var(--text);">Final</strong>.</span>
+        <span class="itag ir" style="font-size:12px;padding:4px 10px;white-space:nowrap;">✗ Nadie acierta</span>
+        <span style="font-size:13px;color:var(--text-2);">El bote se acumula al bote de la <strong style="color:var(--text);">Final</strong>.</span>
       </div>
-
       <div style="background:var(--gold-light);border-radius:var(--radius-sm);padding:12px;margin-top:12px;">
-        <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:6px;">Ejemplo — partido de 16avos (bote = Q37.50)</div>
+        <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:5px;">Ejemplo — 16avos (bote Q37.50)</div>
         <div style="font-size:12px;color:var(--text-2);line-height:1.8;">
-          3 personas aciertan exacto → cada una recibe <strong style="color:var(--text);">Q12.50</strong><br>
-          Si nadie acierta exacto pero 5 aciertan ganador → cada una recibe <strong style="color:var(--text);">Q7.50</strong><br>
-          Si nadie acierta nada → los Q37.50 van al bote de la Final
+          3 aciertan exacto → cada uno recibe <strong style="color:var(--text);">Q12.50</strong><br>
+          5 aciertan ganador (sin exactos) → cada uno recibe <strong style="color:var(--text);">Q7.50</strong><br>
+          Nadie acierta → Q37.50 van al bote de la Final
         </div>
       </div>
     </div>
 
     <div class="card-title">Ganancia neta</div>
     <div class="card">
-      <div style="font-size:13px;color:var(--text-2);line-height:1.7;">
-        Tu ganancia neta es lo que <strong style="color:var(--text);">recibiste</strong> en repartos menos lo que <strong style="color:var(--text);">pagaste</strong> en cuotas por los partidos jugados.
+      <div style="font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:12px;">
+        Lo que <strong style="color:var(--text);">recibiste</strong> en repartos menos lo que <strong style="color:var(--text);">pagaste</strong> en cuotas por los partidos jugados.
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div style="background:var(--green-light);border-radius:var(--radius-sm);padding:10px;text-align:center;">
           <div style="font-size:11px;color:var(--green-dark);margin-bottom:4px;">Ganás más de lo que pagaste</div>
-          <div style="font-size:18px;font-weight:700;color:var(--green-dark);">+Q xx.xx</div>
+          <div style="font-size:20px;font-weight:700;color:var(--green-dark);">+Q xx.xx</div>
         </div>
         <div style="background:var(--red-light);border-radius:var(--radius-sm);padding:10px;text-align:center;">
           <div style="font-size:11px;color:var(--red);margin-bottom:4px;">Ganás menos de lo que pagaste</div>
-          <div style="font-size:18px;font-weight:700;color:var(--red);">-Q xx.xx</div>
+          <div style="font-size:20px;font-weight:700;color:var(--red);">-Q xx.xx</div>
         </div>
       </div>
     </div>
 
-    <div style="text-align:center;padding:1.5rem 0 .5rem;">
-      <div style="font-size:12px;color:var(--text-3);">¿Dudas? Hablá con el admin</div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:4px;">Created by <span style="color:var(--green);font-weight:600;">Gabriel López</span></div>
+    <div style="text-align:center;padding:1.25rem 0 .5rem;">
+      <button class="btn-green" onclick="showTab('quiniela')" style="max-width:280px;margin:0 auto;">Ir a Mi Quiniela →</button>
+      <div style="font-size:11px;color:var(--text-3);margin-top:1rem;">Created by <span style="color:var(--green);font-weight:600;">Gabriel López</span></div>
     </div>
 
   </div>
@@ -827,8 +845,14 @@ let state = {
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", async () => {
-  const today = new Date().toISOString().split("T")[0];
-  document.getElementById("f-date").value = today;
+  const today    = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const toISO = d => d.toISOString().split("T")[0];
+
+  document.getElementById("f-date").value      = toISO(today);
+  document.getElementById("search-date").value = toISO(tomorrow);
+
   loadLocal();
   renderAll();
   await syncAll();
@@ -1239,12 +1263,7 @@ function renderLeaderboard() {
                  : `Q0.00`;
     return `<tr>
       <td style="text-align:center;font-size:14px;">${medal}</td>
-      <td>
-        <div style="font-size:13px;font-weight:600;">${p.name}</div>
-        ${p.exactosTotal > 0 ? `<span class="exact-badge">⚡${p.exactosTotal}</span>` : ""}
-      </td>
-      <td class="stat-cell" style="color:var(--green);font-weight:600;">${p.ganadoresTotal}</td>
-      <td class="stat-cell" style="color:var(--gold);font-weight:600;">${p.exactosTotal}</td>
+      <td style="font-size:13px;font-weight:600;">${p.name}</td>
       <td style="text-align:right;font-weight:700;font-size:14px;">Q${p.recibido.toFixed(2)}</td>
       <td class="gana-cell ${ganCls}">${ganStr}</td>
     </tr>`;
@@ -1281,8 +1300,14 @@ function renderAdmin() {
     return;
   }
   rf.innerHTML = pending.map(m => `
-    <div class="card">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">${m.local} vs ${m.visitante}</div>
+    <div class="card" id="rf-${m.id}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:600;">${m.local} vs ${m.visitante}</div>
+        <button class="btn-search" id="search-btn-${m.id}" onclick="fetchResult('${m.id}','${m.local}','${m.visitante}','${m.fecha}')">
+          🔍 Buscar resultado
+        </button>
+      </div>
+      <div id="search-status-${m.id}" style="font-size:12px;color:var(--text-3);margin-bottom:8px;min-height:16px;"></div>
       <div class="form-grid-3" style="margin-bottom:10px;">
         <div>
           <div class="form-label">${m.local}</div>
@@ -1297,6 +1322,157 @@ function renderAdmin() {
       <button class="btn-green" onclick="saveResult('${m.id}','${m.local}','${m.visitante}')">✓ Confirmar resultado</button>
     </div>
   `).join("");
+}
+
+async function fetchMatches() {
+  const dateInput = document.getElementById("search-date").value;
+  if (!dateInput) { toast("Seleccioná una fecha primero"); return; }
+
+  const btn    = document.getElementById("btn-search-matches");
+  const status = document.getElementById("search-matches-status");
+  const list   = document.getElementById("found-matches-list");
+
+  btn.disabled = true;
+  btn.textContent = "⏳ Buscando...";
+  status.textContent = "";
+  list.innerHTML = "";
+
+  const [y, m, d] = dateInput.split("-");
+  const fechaLegible = `${d}/${m}/${y}`;
+  const fase = PHASES.find(p => p.id === state.activePhase);
+
+  const prompt = `Busca los partidos del Mundial FIFA 2026 del día ${fechaLegible}.
+Para cada partido dame: equipos, hora local de Guatemala (UTC-6).
+Responde ÚNICAMENTE con JSON, sin texto extra, sin markdown:
+{"partidos":[{"local":"País A","visitante":"País B","hora":"18:00"},...],"encontrado":true}
+Si no hay partidos ese día: {"partidos":[],"encontrado":false}
+Solo el JSON.`;
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 500,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await resp.json();
+    const textBlock = data.content?.find(b => b.type === "text");
+    const raw = textBlock?.text?.trim() || "";
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const result = JSON.parse(clean);
+
+    if (!result.encontrado || result.partidos.length === 0) {
+      status.innerHTML = `<span style="color:var(--gold);">⚠️ No se encontraron partidos para ${fechaLegible}. Verificá la fecha o cargalos manualmente.</span>`;
+      btn.disabled = false;
+      btn.textContent = "🔍 Buscar partidos";
+      return;
+    }
+
+    status.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ ${result.partidos.length} partido${result.partidos.length > 1 ? "s" : ""} encontrado${result.partidos.length > 1 ? "s" : ""} para ${fechaLegible}. Confirmá cuáles cargar:</span>`;
+
+    // Mostrar lista de partidos encontrados con checkbox para confirmar
+    list.innerHTML = result.partidos.map((p, i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--border);">
+        <input type="checkbox" id="fm-${i}" checked style="width:18px;height:18px;cursor:pointer;accent-color:var(--green);" />
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;">${p.local} vs ${p.visitante}</div>
+          <div style="font-size:11px;color:var(--text-3);">📅 ${fechaLegible} &nbsp;🕐 ${p.hora} &nbsp;·&nbsp; ${fase?.label || ""} · Q${fase?.cost?.toFixed(2) || "2.50"}</div>
+        </div>
+      </div>
+    `).join("") + `
+      <button class="btn-green" style="margin-top:12px;" onclick="confirmFoundMatches(${JSON.stringify(result.partidos).replace(/"/g, '&quot;')},'${dateInput}')">
+        ✓ Cargar partidos seleccionados
+      </button>`;
+
+  } catch(e) {
+    status.innerHTML = `<span style="color:var(--red);">✗ Error al buscar: ${e.message}. Cargalos manualmente.</span>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = "🔍 Buscar partidos";
+}
+
+async function confirmFoundMatches(partidos, fecha) {
+  const list = document.getElementById("found-matches-list");
+  let cargados = 0;
+
+  for (let i = 0; i < partidos.length; i++) {
+    const chk = document.getElementById(`fm-${i}`);
+    if (!chk?.checked) continue;
+
+    const p  = partidos[i];
+    const id = "m_" + Date.now() + "_" + i;
+    const match = { id, fase: state.activePhase, local: p.local, visitante: p.visitante, fecha, hora: p.hora };
+
+    const res = await apiPost({ action: "addMatch", ...match });
+    if (res.ok) {
+      state.matches.push(match);
+      cargados++;
+    }
+    // Pequeña pausa para evitar rate limit
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  list.innerHTML = "";
+  document.getElementById("search-matches-status").innerHTML = "";
+  renderAdmin();
+  toast(`✓ ${cargados} partido${cargados !== 1 ? "s" : ""} cargado${cargados !== 1 ? "s" : ""} correctamente`);
+}
+
+async function fetchResult(mid, local, visitante, fecha) {
+  const btn    = document.getElementById(`search-btn-${mid}`);
+  const status = document.getElementById(`search-status-${mid}`);
+  btn.disabled = true;
+  btn.textContent = "⏳ Buscando...";
+  status.textContent = "";
+
+  const fechaFmt = fmtFecha(fecha);
+  const prompt = `Busca el resultado final del partido de fútbol: "${local} vs ${visitante}" del ${fechaFmt} en el Mundial FIFA 2026.
+Responde ÚNICAMENTE con un JSON así, sin texto extra, sin markdown:
+{"local":0,"visitante":0,"encontrado":true}
+Si no encontrás el resultado responde: {"local":0,"visitante":0,"encontrado":false}
+Solo el JSON, nada más.`;
+
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await resp.json();
+
+    // Extraer el texto de la respuesta
+    const textBlock = data.content?.find(b => b.type === "text");
+    const raw = textBlock?.text?.trim() || "";
+
+    // Limpiar y parsear JSON
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const result = JSON.parse(clean);
+
+    if (result.encontrado) {
+      document.getElementById(`rh-${mid}`).value = result.local;
+      document.getElementById(`ra-${mid}`).value = result.visitante;
+      status.innerHTML = `<span style="color:var(--green);font-weight:600;">✓ Resultado encontrado: ${local} ${result.local} – ${result.visitante} ${visitante}. Confirmá si es correcto.</span>`;
+    } else {
+      status.innerHTML = `<span style="color:var(--gold);">⚠️ No se encontró el resultado aún. Ingresalo manualmente.</span>`;
+    }
+  } catch(e) {
+    status.innerHTML = `<span style="color:var(--red);">✗ Error al buscar. Ingresalo manualmente.</span>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = "🔍 Buscar resultado";
 }
 
 // ── ACTIONS ───────────────────────────────────────────────────
@@ -1597,7 +1773,7 @@ function shortName(name) {
 
 function showTab(tab) {
   document.querySelectorAll(".nav-btn").forEach((b, i) => {
-    b.classList.toggle("active", ["quiniela","tabla","admin","instrucciones"][i] === tab);
+    b.classList.toggle("active", ["instrucciones","quiniela","tabla","admin"][i] === tab);
   });
   document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
   document.getElementById("tab-" + tab).classList.add("active");
