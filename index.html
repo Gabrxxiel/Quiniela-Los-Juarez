@@ -952,10 +952,11 @@ function renderQuiniela() {
   const alreadySent = !!state.sent?.[sentKey];
 
   matches.forEach(m => {
-    const key  = `${pid}|${m.id}`;
-    const pick = state.picks[key] || {};
-    const res  = state.results[m.id];
-    const locked = !!res || alreadySent;
+    const key     = `${pid}|${m.id}`;
+    const pick    = state.picks[key] || {};
+    const res     = state.results[m.id];
+    const started = matchStarted(m);
+    const locked  = !!res || started;   // bloqueado si ya empezó O ya tiene resultado
 
     // Determinar ganador automático desde el marcador
     const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? parseInt(pick.goles_local) : null;
@@ -971,9 +972,9 @@ function renderQuiniela() {
     // Etiqueta del resultado auto-detectado
     let autoLabel = "";
     if (!locked && autoWinner) {
-      if (autoWinner === "home")   autoLabel = `<span class="auto-tag home">→ Gana ${shortName(m.local)}</span>`;
+      if (autoWinner === "home")      autoLabel = `<span class="auto-tag home">→ Gana ${shortName(m.local)}</span>`;
       else if (autoWinner === "away") autoLabel = `<span class="auto-tag away">→ Gana ${shortName(m.visitante)}</span>`;
-      else                         autoLabel = `<span class="auto-tag draw">→ Empate</span>`;
+      else                            autoLabel = `<span class="auto-tag draw">→ Empate</span>`;
     }
 
     let resultPill = "";
@@ -983,12 +984,40 @@ function renderQuiniela() {
       resultPill = `<div class="result-pill ${cls}">${info.icon} ${info.label} · Resultado oficial: ${res.goles_local}–${res.goles_visitante}</div>`;
     }
 
+    // Badge de estado del partido
+    let statusBadge;
+    if (res) {
+      statusBadge = `<span class="locked-badge">🔒 Resultado oficial</span>`;
+    } else if (started) {
+      statusBadge = `<span class="locked-badge" style="background:var(--red-light);color:var(--red);border-color:var(--red);">🔴 En juego</span>`;
+    } else if (alreadySent && pick.ganador) {
+      statusBadge = `<span class="locked-badge sent-badge">✅ Enviado</span>`;
+    } else {
+      statusBadge = `<span style="font-size:10px;color:var(--green);font-weight:600;">Q${phase.cost.toFixed(2)} · ${phase.label}</span>`;
+    }
+
+    // Tiempo restante si no ha empezado
+    let countdownHtml = "";
+    if (!locked) {
+      try {
+        const fecha = String(m.fecha).split("T")[0];
+        const hora  = fmtHora(m.hora);
+        const matchDate = new Date(`${fecha}T${hora}:00`);
+        const diff = matchDate - new Date();
+        if (diff > 0) {
+          const hh = Math.floor(diff / 3600000);
+          const mm = Math.floor((diff % 3600000) / 60000);
+          if (hh < 24) {
+            countdownHtml = `<div style="font-size:11px;color:var(--text-3);margin-top:4px;">⏱ Cierra en ${hh > 0 ? hh+"h " : ""}${mm}min</div>`;
+          }
+        }
+      } catch(e) {}
+    }
+
     html += `<div class="match-card ${locked && !res ? "card-sent" : ""}">
       <div class="match-meta">
-        <span>📅 ${m.fecha} &nbsp;🕐 ${m.hora}</span>
-        ${res ? `<span class="locked-badge">🔒 Resultado oficial</span>`
-              : alreadySent ? `<span class="locked-badge sent-badge">✅ Enviado</span>`
-              : `<span style="font-size:10px;color:var(--green);font-weight:600;">Q${phase.cost.toFixed(2)} · ${phase.label}</span>`}
+        <span>📅 ${fmtFecha(m.fecha)} &nbsp;🕐 ${fmtHora(m.hora)}</span>
+        ${statusBadge}
       </div>
       <div class="teams-row">
         <span class="team">${m.local}</span>
@@ -1013,21 +1042,38 @@ function renderQuiniela() {
         <div class="score-team right">${m.visitante}</div>
       </div>
 
-      <!-- BOTONES GANADOR (solo visuales, auto-calculados) -->
+      <!-- BOTONES GANADOR -->
       <div class="win-row">
         <div class="win-btn-auto ${selHome}"><span>${shortName(m.local)}</span></div>
         <div class="win-btn-auto ${selDraw}"><span>Empate</span></div>
         <div class="win-btn-auto ${selAway}"><span>${shortName(m.visitante)}</span></div>
       </div>
       ${autoLabel}
+      ${countdownHtml}
       ${resultPill}
     </div>`;
   });
 
+  // Hay partidos sin resultado y sin iniciar donde aún se puede editar
+  const editableMatches = matches.filter(m => !state.results[m.id] && !matchStarted(m));
+  const anyStarted      = matches.some(m => matchStarted(m) && !state.results[m.id]);
+
   if (!alreadySent) {
-    html += `<button class="btn-green" onclick="savePicks()">💾 Guardar mi quiniela en Sheets</button>`;
+    if (editableMatches.length > 0) {
+      html += `<button class="btn-green" onclick="savePicks()">💾 Guardar mi quiniela en Sheets</button>`;
+    } else if (anyStarted) {
+      html += `<div class="sent-notice" style="background:var(--red-light);color:var(--red);">🔴 Los partidos ya iniciaron — no podés guardar más predicciones</div>`;
+    }
   } else {
-    html += `<div class="sent-notice">✅ Quiniela enviada — ya no podés modificarla</div>`;
+    const canUnlock = editableMatches.length > 0;
+    html += `<div class="sent-notice">
+      ✅ Quiniela enviada
+      ${canUnlock
+        ? `<button onclick="resetSent('${pid}')" style="display:block;margin:8px auto 0;background:none;border:1px solid var(--green-dark);color:var(--green-dark);padding:5px 14px;border-radius:20px;font-size:11px;cursor:pointer;">↺ Corregir mi quiniela</button>`
+        : `<div style="font-size:11px;margin-top:6px;opacity:.7;">Los partidos ya iniciaron — no se puede modificar</div>`
+      }
+    </div>`;
+  }
   }
 
   body.innerHTML = html;
@@ -1199,7 +1245,7 @@ function renderAdmin() {
     listEl.innerHTML = matches.map(m =>
       `<div class="match-list-row">
         <span style="flex:1;font-weight:600;">${m.local} vs ${m.visitante}</span>
-        <span style="font-size:11px;color:var(--text-3);">${m.fecha} ${m.hora}</span>
+        <span style="font-size:11px;color:var(--text-3);">${fmtFecha(m.fecha)} ${fmtHora(m.hora)}</span>
         <button class="del-btn" onclick="deleteMatch('${m.id}')" title="Eliminar">✕</button>
       </div>`
     ).join("");
@@ -1258,6 +1304,25 @@ function pickScore(pid, mid, field, val) {
   if (!state.picks[key]) state.picks[key] = {};
   state.picks[key][field] = val === "" ? "" : parseInt(val);
   saveLocal();
+}
+
+// Retorna true si el partido ya comenzó (fecha+hora <= ahora)
+function matchStarted(m) {
+  try {
+    const fecha = String(m.fecha).split("T")[0]; // YYYY-MM-DD
+    const hora  = fmtHora(m.hora);               // HH:MM
+    if (!fecha || !hora || hora === "—") return false;
+    const matchDate = new Date(`${fecha}T${hora}:00`);
+    return matchDate <= new Date();
+  } catch(e) { return false; }
+}
+
+function resetSent(pid) {
+  if (!confirm("¿Seguro que querés editar tu quiniela? Deberás volver a guardarla.")) return;
+  const key = `sent|${pid}|${state.activePhase}`;
+  if (state.sent) delete state.sent[key];
+  saveLocal();
+  renderQuiniela();
 }
 
 function pickScoreAuto(pid, mid, field, val) {
@@ -1404,6 +1469,52 @@ function evalPick(pick, res, cost, mid) {
 function getPlayerPts(name) {
   const sp = state.players.find(p => p.nombre === name);
   return sp ? parseFloat(sp.puntos).toFixed(2) : "0.00";
+}
+
+function fmtFecha(val) {
+  if (!val) return "—";
+  // Si ya viene como YYYY-MM-DD, formatear bonito
+  const s = String(val);
+  if (s.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [y, m, d] = s.split("-");
+    return `${d}/${m}/${y}`;
+  }
+  // Si viene como Date object o ISO string de Sheets
+  try {
+    const d = new Date(val);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 1900) {
+      return d.toLocaleDateString("es-GT", { day:"2-digit", month:"2-digit", year:"numeric" });
+    }
+  } catch(e) {}
+  return s.split("T")[0] || val;
+}
+
+function fmtHora(val) {
+  if (!val) return "—";
+  const s = String(val);
+  // Formato correcto HH:MM
+  if (s.match(/^\d{2}:\d{2}$/)) return s;
+  // ISO string — extraer la hora
+  if (s.includes("T")) {
+    const t = s.split("T")[1]?.substring(0, 5);
+    if (t) return t;
+  }
+  // Sheets guarda horas como decimal (fracción del día)
+  const n = parseFloat(s);
+  if (!isNaN(n) && n >= 0 && n < 1) {
+    const totalMin = Math.round(n * 24 * 60);
+    const hh = Math.floor(totalMin / 60).toString().padStart(2, "0");
+    const mm = (totalMin % 60).toString().padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+  // Fecha 1899 de Sheets — extraer hora del objeto Date
+  try {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString("es-GT", { hour:"2-digit", minute:"2-digit", hour12:false });
+    }
+  } catch(e) {}
+  return s;
 }
 
 function initials(name) {
