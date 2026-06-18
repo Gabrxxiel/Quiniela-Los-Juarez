@@ -880,12 +880,10 @@ async function syncAll() {
     // players
     state.players = data.players || [];
 
-    // picks remotos → merge con locales (local gana si más reciente)
-    // Los picks del servidor se cargan para TODOS los jugadores (para mostrar resultados)
+    // picks remotos → merge con locales
     const allPicks = await apiFetch({ action: "getPicks" });
     (allPicks || []).forEach(p => {
       const key = `${p.jugador}|${p.partido_id}`;
-      // Solo sobreescribir si no hay pick local guardado
       if (!state.picks[key]) {
         state.picks[key] = {
           ganador:         p.ganador,
@@ -894,6 +892,26 @@ async function syncAll() {
         };
       }
     });
+
+    // Si hay partidos nuevos sin pick en una fase marcada como enviada → limpiar el flag
+    // Esto evita que un partido cargado después quede bloqueado por un envío anterior
+    if (state.sent) {
+      PHASES.forEach(ph => {
+        PLAYERS.forEach(name => {
+          const sentKey = `sent|${name}|${ph.id}`;
+          if (!state.sent[sentKey]) return;
+          const phMatches = state.matches.filter(m => String(m.fase) === ph.id);
+          const hasNewMatch = phMatches.some(m => {
+            const pick = state.picks[`${name}|${m.id}`];
+            return !pick || !pick.ganador;
+          });
+          if (hasNewMatch) {
+            delete state.sent[sentKey];
+          }
+        });
+      });
+      saveLocal();
+    }
 
     renderAll();
     toast("✓ Datos sincronizados");
