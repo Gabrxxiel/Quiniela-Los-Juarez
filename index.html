@@ -1067,7 +1067,19 @@ function renderQuiniela() {
   }
 
   const phase = PHASES.find(p => p.id === state.activePhase);
-  const matches = state.matches.filter(m => String(m.fase) === state.activePhase);
+  const now   = new Date();
+  const matches = state.matches
+    .filter(m => String(m.fase) === state.activePhase)
+    .filter(m => {
+      // Quitar partidos que ya pasaron Y tienen resultado — solo si no tienen resultado se mantienen aunque hayan pasado
+      if (state.results[m.id]) return false; // ya terminó, no mostrar en Mi Quiniela
+      return true;
+    })
+    .sort((a, b) => {
+      const da = new Date(`${String(a.fecha).split("T")[0]}T${fmtHora(a.hora)}:00`);
+      const db = new Date(`${String(b.fecha).split("T")[0]}T${fmtHora(b.hora)}:00`);
+      return da - db;
+    });
 
   let html = `<div class="phase-row">`;
   PHASES.forEach(p => {
@@ -1076,7 +1088,13 @@ function renderQuiniela() {
   html += `</div>`;
 
   if (matches.length === 0) {
-    html += `<div class="empty"><div class="ico">📅</div>El admin aún no cargó partidos para ${phase.label}</div>`;
+    // Verificar si hay partidos en esta fase pero todos ya tienen resultado
+    const allMatches = state.matches.filter(m => String(m.fase) === state.activePhase);
+    if (allMatches.length > 0 && allMatches.every(m => state.results[m.id])) {
+      html += `<div class="empty"><div class="ico">✅</div>Todos los partidos de ${phase.label} ya terminaron<br><span style="font-size:12px;">Revisá los resultados en la pestaña Resultados</span></div>`;
+    } else {
+      html += `<div class="empty"><div class="ico">📅</div>El admin aún no cargó partidos para ${phase.label}</div>`;
+    }
     body.innerHTML = html;
     return;
   }
@@ -1427,8 +1445,14 @@ function renderAdmin() {
     `<button class="phase-pill ${p.id === state.activePhase ? "active" : ""}" onclick="setPhase('${p.id}')">${p.label} · Q${p.cost.toFixed(2)}</button>`
   ).join("");
 
-  // match list
-  const matches = state.matches.filter(m => String(m.fase) === state.activePhase);
+  // match list — ordenado por fecha/hora ascendente
+  const matches = state.matches
+    .filter(m => String(m.fase) === state.activePhase)
+    .sort((a, b) => {
+      const da = new Date(`${String(a.fecha).split("T")[0]}T${fmtHora(a.hora)}:00`);
+      const db = new Date(`${String(b.fecha).split("T")[0]}T${fmtHora(b.hora)}:00`);
+      return da - db;
+    });
   const listEl  = document.getElementById("admin-match-list");
   if (matches.length === 0) {
     listEl.innerHTML = `<div class="empty" style="padding:1rem 0;"  >Sin partidos en esta fase</div>`;
