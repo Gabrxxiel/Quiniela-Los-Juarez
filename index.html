@@ -930,7 +930,7 @@ let state = {
 };
 
 // ── INIT ──────────────────────────────────────────────────────
-window.addEventListener("DOMContentLoaded", async () => {
+window.addEventListener("DOMContentLoaded", () => {
   const today    = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
@@ -939,9 +939,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("f-date").value      = toISO(today);
   document.getElementById("search-date").value = toISO(tomorrow);
 
+  // Mostrar la app inmediatamente con datos del localStorage
   loadLocal();
+  showLoader(false);
   renderAll();
-  await syncAll();
+
+  // Sync en background — no bloquea la UI
+  syncAll();
 });
 
 function loadLocal() {
@@ -984,10 +988,13 @@ async function apiPost(body) {
 }
 
 async function syncAll() {
-  setLoaderMsg("Sincronizando con Google Sheets...");
-  showLoader(true);
+  // Mostrar indicador sutil en el botón sync sin bloquear la UI
+  const syncBtn = document.getElementById("sync-btn");
+  if (syncBtn) syncBtn.textContent = "⏳";
+
   try {
-    const data = await apiFetch({ action: "getAll" });
+    // Una sola llamada que trae todo: matches, results, players Y picks
+    const data = await apiFetch({ action: "getAllWithPicks" });
     if (data.error) throw new Error(data.error);
 
     state.matches = data.matches || [];
@@ -997,13 +1004,14 @@ async function syncAll() {
       state.results[r.partido_id] = {
         goles_local:     Number(r.goles_local),
         goles_visitante: Number(r.goles_visitante),
+        penal_winner:    r.penal_winner || "",
       };
     });
 
     state.players = data.players || [];
 
-    const allPicks = await apiFetch({ action: "getPicks" });
-    (allPicks || []).forEach(p => {
+    // Merge picks remotos con locales (local gana si ya existe)
+    (data.picks || []).forEach(p => {
       const key = `${p.jugador}|${p.partido_id}`;
       if (!state.picks[key]) {
         state.picks[key] = {
@@ -1014,7 +1022,7 @@ async function syncAll() {
       }
     });
 
-    // Limpiar flag sent si hay partidos nuevos sin pick en esa fase
+    // Limpiar flag sent si hay partidos nuevos sin pick
     if (state.sent) {
       PHASES.forEach(ph => {
         PLAYERS.forEach(name => {
@@ -1032,13 +1040,13 @@ async function syncAll() {
     }
 
     renderAll();
-    toast("✓ Datos sincronizados");
+    toast("✓ Sincronizado");
   } catch(e) {
     console.error("syncAll error:", e);
-    toast("Sin conexión — trabajando con datos locales");
-    renderAll(); // igual renderiza con lo que hay en local
+    // No mostrar error si ya hay datos locales — trabajar offline silenciosamente
+    if (!state.matches.length) toast("Sin conexión — sin datos previos");
   } finally {
-    showLoader(false); // siempre cierra el loader, pase lo que pase
+    if (syncBtn) syncBtn.textContent = "↻ Sync";
   }
 }
 
