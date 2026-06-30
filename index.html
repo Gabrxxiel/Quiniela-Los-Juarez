@@ -696,7 +696,7 @@
           <tr>
             <th style="width:32px;">#</th>
             <th>Jugador</th>
-            <th style="text-align:right;width:48px;">Pts</th>
+            <th style="text-align:center;width:52px;">✓</th>
             <th style="text-align:right;">Recibido</th>
             <th style="text-align:right;">Ganancia</th>
           </tr>
@@ -704,7 +704,7 @@
         <tbody id="lb-body"></tbody>
       </table>
     </div>
-    <div style="font-size:11px;color:var(--text-3);padding:4px 2px 1rem;">Pts: 2 marcador exacto · 1 ganador correcto · Ganancia = recibido − cuota de partidos jugados</div>
+    <div style="font-size:11px;color:var(--text-3);padding:4px 2px 1rem;">✓ Aciertos = partidos donde recibiste parte del bote · Ganancia = recibido − cuota de partidos jugados</div>
   </div>
 
   <!-- ══ ADMIN ══ -->
@@ -1375,32 +1375,22 @@ function renderLeaderboard() {
   ${acumuladoFinal > 0 ? `<div style="background:var(--red-light);border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;color:var(--red);font-weight:600;margin-bottom:1rem;">⚠️ Q${acumuladoFinal.toFixed(2)} acumulados para la Final por partidos sin acertantes</div>` : ""}`;
 
   // Tabla ranking
+  const { detalleByMatch } = calcSharedPool();
   const board = PLAYERS.map(name => {
-    let exactosTotal = 0, ganadoresTotal = 0, jugadoTotal = 0, partidosJugados = 0;
+    let aciertos = 0, jugadoTotal = 0, partidosJugados = 0;
     PHASES.forEach(ph => {
       state.matches.filter(m => String(m.fase) === ph.id).forEach(m => {
-        const res  = state.results[m.id];
-        const pick = state.picks[`${name}|${m.id}`];
-        // Jugado = partido con resultado oficial, sin importar si envió pick
-        if (res) {
-          jugadoTotal += ph.cost;
-          partidosJugados++;
-        }
-        if (!res || !pick || !pick.ganador) return;
-        const rWinner = res.goles_local > res.goles_visitante ? "home"
-                      : res.goles_visitante > res.goles_local ? "away" : "draw";
-        const exact = pick.ganador === rWinner &&
-                      Number(pick.goles_local)     === Number(res.goles_local) &&
-                      Number(pick.goles_visitante) === Number(res.goles_visitante);
-        if (exact) exactosTotal++;
-        else if (pick.ganador === rWinner) ganadoresTotal++;
+        const res = state.results[m.id];
+        if (res) { jugadoTotal += ph.cost; partidosJugados++; }
+        // Acierto = el jugador está en la lista de ganadores del reparto de ese partido
+        const det = detalleByMatch[m.id];
+        if (det && det.ganadores && det.ganadores.includes(name)) aciertos++;
       });
     });
     const recibido  = ganancia[name] || 0;
     const gananciaN = Math.round((recibido - jugadoTotal) * 100) / 100;
-    const pts       = calcPlayerScore(name);
-    return { name, recibido, exactosTotal, ganadoresTotal, jugadoTotal, partidosJugados, ganancia: gananciaN, pts };
-  }).sort((a, b) => b.pts - a.pts || b.recibido - a.recibido);
+    return { name, recibido, aciertos, jugadoTotal, partidosJugados, ganancia: gananciaN };
+  }).sort((a, b) => b.ganancia - a.ganancia || b.recibido - a.recibido || b.aciertos - a.aciertos);
 
   const medals = ["🥇","🥈","🥉"];
   document.getElementById("lb-body").innerHTML = board.map((p, i) => {
@@ -1415,7 +1405,7 @@ function renderLeaderboard() {
         <div style="font-size:13px;font-weight:600;">${p.name}</div>
         ${p.partidosJugados > 0 ? `<div style="font-size:10px;color:var(--text-3);">${p.partidosJugados} partido${p.partidosJugados !== 1 ? "s" : ""} jugado${p.partidosJugados !== 1 ? "s" : ""}</div>` : ""}
       </td>
-      <td style="text-align:right;font-weight:700;font-size:15px;color:var(--green-dark);">${p.pts}</td>
+      <td style="text-align:center;font-weight:700;font-size:15px;color:var(--green-dark);">${p.aciertos}</td>
       <td style="text-align:right;font-weight:600;font-size:13px;">Q${p.recibido.toFixed(2)}</td>
       <td class="gana-cell ${ganCls}">${ganStr}</td>
     </tr>`;
