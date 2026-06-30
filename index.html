@@ -831,10 +831,10 @@
 
     <div class="card-title">Cómo se reparte el bote</div>
     <div class="card">
-      <div style="font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:12px;">Cada partido tiene su propio bote = <strong style="color:var(--text);">cuota × 15 jugadores</strong>. Al conocerse el resultado:</div>
+      <div style="font-size:13px;color:var(--text-2);line-height:1.7;margin-bottom:12px;">Cada partido tiene su propio bote = <strong style="color:var(--text);">cuota × jugadores</strong>. Al conocerse el resultado:</div>
       <div class="instr-rule">
         <span class="itag ig" style="font-size:12px;padding:4px 10px;white-space:nowrap;">⚡ Marcador exacto</span>
-        <span style="font-size:13px;color:var(--text-2);">El bote se divide entre todos los que acertaron el marcador exacto.</span>
+        <span style="font-size:13px;color:var(--text-2);">El bote se divide entre todos los que acertaron el marcador exacto de los 120 minutos.</span>
       </div>
       <div class="instr-rule">
         <span class="itag id" style="font-size:12px;padding:4px 10px;white-space:nowrap;">✓ Ganador correcto</span>
@@ -845,11 +845,20 @@
         <span style="font-size:13px;color:var(--text-2);">El bote se acumula al bote de la <strong style="color:var(--text);">Final</strong>.</span>
       </div>
       <div style="background:var(--gold-light);border-radius:var(--radius-sm);padding:12px;margin-top:12px;">
-        <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:5px;">Ejemplo — 16avos (bote Q37.50)</div>
+        <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:5px;">Ejemplo — 16avos (bote Q35.00)</div>
         <div style="font-size:12px;color:var(--text-2);line-height:1.8;">
-          3 aciertan exacto → cada uno recibe <strong style="color:var(--text);">Q12.50</strong><br>
-          5 aciertan ganador (sin exactos) → cada uno recibe <strong style="color:var(--text);">Q7.50</strong><br>
-          Nadie acierta → Q37.50 van al bote de la Final
+          3 aciertan exacto → cada uno recibe <strong style="color:var(--text);">Q11.67</strong><br>
+          5 aciertan ganador (sin exactos) → cada uno recibe <strong style="color:var(--text);">Q7.00</strong><br>
+          Nadie acierta → Q35.00 van al bote de la Final
+        </div>
+      </div>
+      <div style="background:var(--blue-light);border-radius:var(--radius-sm);padding:12px;margin-top:12px;">
+        <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:5px;">⚽ Cuartos en adelante — penales</div>
+        <div style="font-size:12px;color:var(--text-2);line-height:1.7;">
+          A partir de Cuartos de final no existe la opción "empate": el partido siempre tiene un ganador. El marcador que ingresás es el resultado <strong style="color:var(--text);">tras los 120 minutos</strong> (tiempo regular + tiempo extra, si lo hubo).
+          Si ese marcador queda igualado, significa que se definió en penales y elegís quién avanzó.
+          El marcador exacto siempre se evalúa contra ese resultado de 120 minutos, nunca contra los penales.<br><br>
+          <strong style="color:var(--text);">Solo si el partido se resolvió en penales</strong> se reparte el 40% del bote entre los que acertaron el ganador — el 60% restante se acumula al bote de la Final. Si alguien ganó dentro de los 120 minutos (sin necesidad de penales), el reparto es 100% normal.
         </div>
       </div>
     </div>
@@ -1121,8 +1130,11 @@ function renderQuiniela() {
 
     const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? parseInt(pick.goles_local) : null;
     const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? parseInt(pick.goles_visitante) : null;
+    const esEliminatoria = ["qf","sf","f3","final"].includes(String(m.fase));
+    const empatadoEnPick = gl !== null && ga !== null && gl === ga;
+
     const autoWinner = (gl !== null && ga !== null)
-      ? (gl > ga ? "home" : ga > gl ? "away" : "draw")
+      ? (gl > ga ? "home" : ga > gl ? "away" : (esEliminatoria ? (pick.ganador === "home" || pick.ganador === "away" ? pick.ganador : null) : "draw"))
       : pick.ganador || null;
 
     const selHome = autoWinner === "home" ? "sel-home" : "";
@@ -1134,6 +1146,22 @@ function renderQuiniela() {
       if (autoWinner === "home")      autoLabel = `<span class="auto-tag home">→ Gana ${shortName(m.local)}</span>`;
       else if (autoWinner === "away") autoLabel = `<span class="auto-tag away">→ Gana ${shortName(m.visitante)}</span>`;
       else                            autoLabel = `<span class="auto-tag draw">→ Empate</span>`;
+    }
+
+    // Selector de penales para el jugador cuando hay empate en fase eliminatoria
+    let penalUserSelector = "";
+    if (!locked && esEliminatoria && empatadoEnPick) {
+      penalUserSelector = `<div style="background:var(--gold-light);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;">
+        <div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:6px;">⚽ Empate — ¿quién avanza en penales?</div>
+        <div style="display:flex;gap:6px;">
+          <button type="button" onclick="pickPenalUser('${pid}','${m.id}','home')"
+            style="flex:1;padding:6px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;
+            ${pick.ganador === "home" ? "background:var(--green-light);border:1px solid var(--green);color:var(--green-dark);" : "background:var(--surface);border:1px solid var(--border-md);color:var(--text);"}">${shortName(m.local)}</button>
+          <button type="button" onclick="pickPenalUser('${pid}','${m.id}','away')"
+            style="flex:1;padding:6px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;
+            ${pick.ganador === "away" ? "background:var(--green-light);border:1px solid var(--green);color:var(--green-dark);" : "background:var(--surface);border:1px solid var(--border-md);color:var(--text);"}">${shortName(m.visitante)}</button>
+        </div>
+      </div>`;
     }
 
     let resultPill = "";
@@ -1212,9 +1240,10 @@ function renderQuiniela() {
       </div>
       <div class="win-row">
         <div class="win-btn-auto ${selHome}"><span>${shortName(m.local)}</span></div>
-        <div class="win-btn-auto ${selDraw}"><span>Empate</span></div>
+        ${esEliminatoria ? "" : `<div class="win-btn-auto ${selDraw}"><span>Empate</span></div>`}
         <div class="win-btn-auto ${selAway}"><span>${shortName(m.visitante)}</span></div>
       </div>
+      ${penalUserSelector}
       ${autoLabel}
       ${countdownHtml}
       ${resultPill}
@@ -1244,18 +1273,18 @@ function calcSharedPool() {
     // Si este partido es la Final, sumar acumulado
     if (String(m.fase) === "final") bote += acumuladoFinal;
 
-    const rWinner = res.goles_local > res.goles_visitante ? "home"
-                  : res.goles_visitante > res.goles_local  ? "away" : "draw";
+    const rWinner   = _actualWinner(res);
+    const sePenales = res.penal_winner === "home" || res.penal_winner === "away";
 
-    // Quién acertó exacto
+    // Quién acertó el marcador exacto de 120 min (no afectado por penales)
     const exactos = PLAYERS.filter(name => {
       const pick = state.picks[`${name}|${m.id}`];
-      return pick && pick.ganador === rWinner &&
+      return pick &&
              Number(pick.goles_local)     === Number(res.goles_local) &&
              Number(pick.goles_visitante) === Number(res.goles_visitante);
     });
 
-    // Quién acertó ganador
+    // Quién acertó el ganador real (incluye penales)
     const ganadores = PLAYERS.filter(name => {
       const pick = state.picks[`${name}|${m.id}`];
       return pick && pick.ganador === rWinner;
@@ -1268,8 +1297,22 @@ function calcSharedPool() {
       tipo   = "exacto";
       ganadores_reparto = exactos;
       exactos.forEach(n => ganancia[n] = Math.round((ganancia[n] + premio) * 100) / 100);
-      acumuladoFinal = 0; // se repartió, se limpia acumulado
+      acumuladoFinal = 0;
+    } else if (ganadores.length > 0 && sePenales) {
+      // Definido en penales: solo se reparte el 40% del bote entre los que acertaron ganador
+      const boteReparto = Math.round(bote * 0.4 * 100) / 100;
+      const boteAcumula = Math.round((bote - boteReparto) * 100) / 100;
+      premio = Math.round((boteReparto / ganadores.length) * 100) / 100;
+      tipo   = "ganador";
+      ganadores_reparto = ganadores;
+      ganadores.forEach(n => ganancia[n] = Math.round((ganancia[n] + premio) * 100) / 100);
+      if (String(m.fase) !== "final") {
+        acumuladoFinal = Math.round((acumuladoFinal + boteAcumula) * 100) / 100;
+      } else {
+        acumuladoFinal = 0;
+      }
     } else if (ganadores.length > 0) {
+      // Ganó en tiempo regular: reparto normal 100%
       premio = Math.round((bote / ganadores.length) * 100) / 100;
       tipo   = "ganador";
       ganadores_reparto = ganadores;
@@ -1284,7 +1327,7 @@ function calcSharedPool() {
       premio = 0;
     }
 
-    detalleByMatch[m.id] = { bote, tipo, premio, ganadores: ganadores_reparto, acumuladoFinal };
+    detalleByMatch[m.id] = { bote, tipo, premio, ganadores: ganadores_reparto, acumuladoFinal, penales: sePenales };
   });
 
   return { ganancia, acumuladoFinal, detalleByMatch };
@@ -1314,16 +1357,18 @@ function renderLeaderboard() {
   phaseSummary.innerHTML = `<div class="card-title">Resumen por fase</div>
   <div class="phase-summary-grid">
     ${PHASES.map(ph => {
-      const phMatches = state.matches.filter(m => String(m.fase) === ph.id);
-      const phWithRes = phMatches.filter(m => state.results[m.id]);
-      const phPool    = phMatches.length * ph.cost * PLAYERS.length;
-      const isActive  = ph.id === state.activePhase;
-      const isFinal   = ph.id === "final";
+      const phMatches  = state.matches.filter(m => String(m.fase) === ph.id);
+      const phWithRes  = phMatches.filter(m => state.results[m.id]);
+      const phPool     = phMatches.length * ph.cost * PLAYERS.length;
+      const phJugado   = phWithRes.length * ph.cost * PLAYERS.length;
+      const isActive   = ph.id === state.activePhase;
+      const isFinal    = ph.id === "final";
       return `<div class="phase-sum-card ${isActive ? "active-phase" : ""}">
         <div class="psf-label">${ph.label}</div>
         <div class="psf-cost">Q${ph.cost.toFixed(2)}/partido</div>
         <div class="psf-pool">Bote Q${phPool.toFixed(2)}${isFinal && acumuladoFinal > 0 ? `<br><span style="color:var(--red);font-size:10px;">+Q${acumuladoFinal.toFixed(2)} acum.</span>` : ""}</div>
         <div class="psf-done">${phWithRes.length > 0 ? `${phWithRes.length}/${phMatches.length} jugados` : phMatches.length > 0 ? `${phMatches.length} cargados` : "Sin partidos"}</div>
+        ${phWithRes.length > 0 ? `<div style="font-size:10px;color:var(--green-dark);font-weight:600;margin-top:2px;">Q${phJugado.toFixed(2)} jugado</div>` : ""}
       </div>`;
     }).join("")}
   </div>
@@ -1500,6 +1545,8 @@ function renderAdmin() {
         ${missing.length > 0 ? `<div style="font-size:11px;color:var(--red);margin-top:6px;">⚠️ Faltan: ${missing.join(", ")}</div>` : `<div style="font-size:11px;color:var(--green);margin-top:6px;">✓ Todos enviaron</div>`}
       </div>`;
 
+    const esEliminatoria = ["qf","sf","f3","final"].includes(m.fase);
+
     return `
     <div class="card" id="rf-${m.id}">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
@@ -1513,14 +1560,23 @@ function renderAdmin() {
       <div class="form-grid-3" style="margin-bottom:10px;">
         <div>
           <div class="form-label">${m.local}</div>
-          <input class="form-inp center" type="number" min="0" id="rh-${m.id}" placeholder="0" />
+          <input class="form-inp center" type="number" min="0" id="rh-${m.id}" placeholder="0"
+            ${esEliminatoria ? `oninput="toggleDrawOptions('${m.id}','${m.local}','${m.visitante}')"` : ""} />
         </div>
         <div style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;color:var(--text-3);font-size:18px;font-weight:700;">:</div>
         <div>
           <div class="form-label">${m.visitante}</div>
-          <input class="form-inp center" type="number" min="0" id="ra-${m.id}" placeholder="0" />
+          <input class="form-inp center" type="number" min="0" id="ra-${m.id}" placeholder="0"
+            ${esEliminatoria ? `oninput="toggleDrawOptions('${m.id}','${m.local}','${m.visitante}')"` : ""} />
         </div>
       </div>
+      ${esEliminatoria ? `<div id="draw-options-${m.id}" style="display:none;background:var(--gold-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:8px;">⚽ Empate en 120 min — ¿quién avanzó en penales/tiempo extra?</div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="form-inp" id="pen-home-${m.id}" onclick="setPenalWinner('${m.id}','home')" style="cursor:pointer;text-align:center;font-weight:600;">${m.local}</button>
+          <button type="button" class="form-inp" id="pen-away-${m.id}" onclick="setPenalWinner('${m.id}','away')" style="cursor:pointer;text-align:center;font-weight:600;">${m.visitante}</button>
+        </div>
+      </div>` : ""}
       <button class="btn-green" onclick="saveResult('${m.id}','${m.local}','${m.visitante}')">✓ Confirmar resultado</button>
     </div>`;
   }).join("");
@@ -1711,12 +1767,38 @@ function pickScoreAuto(pid, mid, field, val) {
   const key = `${pid}|${mid}`;
   if (!state.picks[key]) state.picks[key] = {};
   state.picks[key][field] = val === "" ? "" : parseInt(val);
-  // Auto-calcular ganador desde el marcador
+
   const gl = state.picks[key].goles_local;
   const ga = state.picks[key].goles_visitante;
+  const m  = state.matches.find(x => x.id === mid);
+  const esEliminatoria = m && ["qf","sf","f3","final"].includes(String(m.fase));
+
   if (gl !== "" && ga !== "" && gl !== undefined && ga !== undefined) {
-    state.picks[key].ganador = gl > ga ? "home" : ga > gl ? "away" : "draw";
+    if (gl > ga) {
+      state.picks[key].ganador = "home";
+    } else if (ga > gl) {
+      state.picks[key].ganador = "away";
+    } else {
+      // Empate en marcador
+      if (esEliminatoria) {
+        // En fases eliminatorias no existe el empate como resultado final —
+        // se mantiene el ganador previamente elegido en penales, si lo hay
+        if (state.picks[key].ganador !== "home" && state.picks[key].ganador !== "away") {
+          state.picks[key].ganador = null;
+        }
+      } else {
+        state.picks[key].ganador = "draw";
+      }
+    }
   }
+  saveLocal();
+  renderQuiniela();
+}
+
+function pickPenalUser(pid, mid, side) {
+  const key = `${pid}|${mid}`;
+  if (!state.picks[key]) state.picks[key] = {};
+  state.picks[key].ganador = side;
   saveLocal();
   renderQuiniela();
 }
@@ -1801,34 +1883,65 @@ async function deleteMatch(id) {
   toast("Partido eliminado");
 }
 
+function toggleDrawOptions(mid, local, visitante) {
+  const h = document.getElementById(`rh-${mid}`).value;
+  const a = document.getElementById(`ra-${mid}`).value;
+  const box = document.getElementById(`draw-options-${mid}`);
+  if (!box) return;
+  if (h !== "" && a !== "" && parseInt(h) === parseInt(a)) {
+    box.style.display = "block";
+  } else {
+    box.style.display = "none";
+    delete state.pendingPenalWinner?.[mid];
+  }
+}
+
+function setPenalWinner(mid, side) {
+  if (!state.pendingPenalWinner) state.pendingPenalWinner = {};
+  state.pendingPenalWinner[mid] = side;
+  const homeBtn = document.getElementById(`pen-home-${mid}`);
+  const awayBtn = document.getElementById(`pen-away-${mid}`);
+  if (homeBtn) homeBtn.style.cssText += side === "home" ? "background:var(--green-light);border-color:var(--green);color:var(--green-dark);" : "background:var(--bg);border-color:var(--border-md);color:var(--text);";
+  if (awayBtn) awayBtn.style.cssText += side === "away" ? "background:var(--green-light);border-color:var(--green);color:var(--green-dark);" : "background:var(--bg);border-color:var(--border-md);color:var(--text);";
+}
+
 async function saveResult(mid, local, visitante) {
   const h = document.getElementById(`rh-${mid}`).value;
   const a = document.getElementById(`ra-${mid}`).value;
   if (h === "" || a === "") { toast("Ingresá el marcador completo"); return; }
 
   const fase = state.matches.find(m => m.id === mid)?.fase || state.activePhase;
-  const res  = await apiPost({
+  const esEliminatoria = ["qf","sf","f3","final"].includes(fase);
+  const empatado = parseInt(h) === parseInt(a);
+
+  let penalWinner = null;
+  if (esEliminatoria && empatado) {
+    penalWinner = state.pendingPenalWinner?.[mid];
+    if (!penalWinner) { toast("Indicá quién avanzó en penales/tiempo extra"); return; }
+  }
+
+  const res = await apiPost({
     action: "saveResult",
     partido_id: mid,
     local, visitante,
     goles_local:     parseInt(h),
     goles_visitante: parseInt(a),
+    penal_winner: penalWinner || "",
     fase,
   });
   if (res.error) { toast("Error: " + res.error); return; }
 
-  state.results[mid] = { goles_local: parseInt(h), goles_visitante: parseInt(a) };
+  state.results[mid] = { goles_local: parseInt(h), goles_visitante: parseInt(a), penal_winner: penalWinner || "" };
+  if (state.pendingPenalWinner) delete state.pendingPenalWinner[mid];
   renderAll();
-  toast(`Resultado guardado: ${local} ${h}–${a} ${visitante}`);
+  toast(`Resultado guardado: ${local} ${h}–${a} ${visitante}${penalWinner ? " (penales: " + (penalWinner === "home" ? local : visitante) + ")" : ""}`);
   await syncAll();
 }
 
 // ── HELPERS ───────────────────────────────────────────────────
 function evalPick(pick, res, cost, mid) {
-  const rWinner = res.goles_local > res.goles_visitante ? "home"
-                : res.goles_visitante > res.goles_local ? "away" : "draw";
-  const exact  = pick.ganador === rWinner &&
-                 Number(pick.goles_local) === Number(res.goles_local) &&
+  const rWinner = _actualWinner(res);
+  const exact  = Number(pick.goles_local) === Number(res.goles_local) &&
                  Number(pick.goles_visitante) === Number(res.goles_visitante);
   const winner = pick.ganador === rWinner;
 
@@ -1842,10 +1955,17 @@ function evalPick(pick, res, cost, mid) {
     exact, winner,
     icon:  exact ? "⚡" : winner ? "✓" : "✗",
     label: exact && tipo === "exacto"   ? `Marcador exacto → recibís Q${premio.toFixed(2)}`
-         : winner && tipo === "ganador" ? `Ganador correcto → recibís Q${premio.toFixed(2)}`
+         : winner && tipo === "ganador" ? `Ganador correcto → recibís Q${premio.toFixed(2)}${det?.penales ? " (40% — resto al bote de la Final)" : ""}`
          : exact || winner              ? `Acierto → pendiente de reparto`
          : `Sin puntos`,
   };
+}
+
+// Determina el ganador real del partido: si hubo penales, ese define; si no, el marcador
+function _actualWinner(res) {
+  if (res.penal_winner === "home" || res.penal_winner === "away") return res.penal_winner;
+  return res.goles_local > res.goles_visitante ? "home"
+       : res.goles_visitante > res.goles_local  ? "away" : "draw";
 }
 
 // Sistema de puntos: 2 = marcador exacto, 1 = ganador correcto, 0 = fallo
@@ -1855,11 +1975,10 @@ function calcPlayerScore(name) {
     const res  = state.results[m.id];
     const pick = state.picks[`${name}|${m.id}`];
     if (!res || !pick || !pick.ganador) return;
-    const rWinner = res.goles_local > res.goles_visitante ? "home"
-                  : res.goles_visitante > res.goles_local  ? "away" : "draw";
+    const rWinner = _actualWinner(res);
     const correct = pick.ganador === rWinner;
-    const exact   = correct &&
-                    Number(pick.goles_local)     === Number(res.goles_local) &&
+    // El marcador exacto siempre se evalúa contra el resultado de 120 min, nunca penales
+    const exact   = Number(pick.goles_local)     === Number(res.goles_local) &&
                     Number(pick.goles_visitante) === Number(res.goles_visitante);
     if (exact)        pts += 2;
     else if (correct) pts += 1;
