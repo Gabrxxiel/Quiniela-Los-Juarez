@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Quiniela Mundial 2026 🏆</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>" />
+<link rel="apple-touch-icon" href="/icon-192.svg" />
+<meta name="theme-color" content="#085041" />
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -641,7 +646,11 @@
   <div>
     <h1>⚽ Quiniela Mundial 2026</h1>
   </div>
-  <button id="sync-btn" onclick="syncAll()">↻ Sync</button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button id="notif-btn" onclick="toggleNotifications()" title="Activar notificaciones"
+      style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 10px;border-radius:20px;font-size:16px;cursor:pointer;">🔔</button>
+    <button id="sync-btn" onclick="syncAll()">↻ Sync</button>
+  </div>
 </header>
 
 <nav>
@@ -2110,6 +2119,118 @@ function toast(msg) {
   el.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove("show"), 3000);
+}
+// ── FIREBASE PUSH NOTIFICATIONS ───────────────────────────────
+const FB_CONFIG = {
+  apiKey:            "AIzaSyCtk6xScE573NjCXaB6cNOHLbMqNxE--ys",
+  authDomain:        "quiniela-los-juarez.firebaseapp.com",
+  projectId:         "quiniela-los-juarez",
+  storageBucket:     "quiniela-los-juarez.firebasestorage.app",
+  messagingSenderId: "951834605545",
+  appId:             "1:951834605545:web:3d2807b1bfe8eaa8b5fd78"
+};
+const VAPID_KEY = "BJchBoEveAQxtZiL1ezFf7z2xOV57DiKDE7Eq6gH2yJtibtLY4s3Mga6qPJ_HtecRv01YpYGIKB3cs_AgaT0OYg";
+
+let fbApp, fbMessaging;
+
+async function initFirebase() {
+  if (fbApp) return true;
+  try {
+    fbApp = firebase.initializeApp(FB_CONFIG);
+    fbMessaging = firebase.messaging();
+
+    // Registrar Service Worker
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+      fbMessaging.useServiceWorker?.(reg);
+    }
+
+    // Escuchar mensajes cuando la app está abierta (foreground)
+    fbMessaging.onMessage(payload => {
+      const title = payload.notification?.title || "⚽ Quiniela";
+      const body  = payload.notification?.body  || "Hay una actualización";
+      toast(`${title}: ${body}`, 6000);
+      // Sincronizar datos automáticamente al recibir notificación
+      syncAll();
+    });
+
+    return true;
+  } catch(e) {
+    console.error("Firebase init error:", e);
+    return false;
+  }
+}
+
+async function toggleNotifications() {
+  const btn = document.getElementById("notif-btn");
+  const current = Notification.permission;
+
+  if (current === "denied") {
+    toast("Notificaciones bloqueadas — habilitarlas en configuración del browser");
+    return;
+  }
+
+  if (current === "granted" && localStorage.getItem("fcm_token")) {
+    // Ya activadas — desactivar
+    localStorage.removeItem("fcm_token");
+    btn.textContent = "🔔";
+    btn.style.opacity = "0.6";
+    toast("Notificaciones desactivadas");
+    return;
+  }
+
+  // Activar
+  btn.textContent = "⏳";
+  const ok = await initFirebase();
+  if (!ok) { btn.textContent = "🔔"; toast("Error iniciando Firebase"); return; }
+
+  try {
+    const token = await fbMessaging.getToken({ vapidKey: VAPID_KEY });
+    if (token) {
+      localStorage.setItem("fcm_token", token);
+      // Enviar el token al Apps Script para guardarlo
+      await apiPost({ action: "saveToken", token, jugador: PLAYERS[state.selectedPlayer] || "admin" });
+      btn.textContent = "🔔";
+      btn.style.opacity = "1";
+      btn.style.background = "rgba(255,255,255,.35)";
+      toast("✓ Notificaciones activadas — recibirás alertas de nuevos partidos y resultados");
+    }
+  } catch(e) {
+    console.error("FCM token error:", e);
+    toast("No se pudieron activar las notificaciones");
+    btn.textContent = "🔔";
+  }
+}
+
+function updateNotifBtn() {
+  const btn = document.getElementById("notif-btn");
+  if (!btn) return;
+  if (Notification.permission === "granted" && localStorage.getItem("fcm_token")) {
+    btn.style.opacity = "1";
+    btn.style.background = "rgba(255,255,255,.35)";
+    btn.title = "Notificaciones activas — clic para desactivar";
+  } else {
+    btn.style.opacity = "0.6";
+    btn.title = "Activar notificaciones";
+  }
+}
+
+// Inicializar Firebase silenciosamente si ya tenía permisos
+window.addEventListener("load", async () => {
+  updateNotifBtn();
+  if (Notification.permission === "granted" && localStorage.getItem("fcm_token")) {
+    await initFirebase();
+  }
+});
+
+// Override de toast para soportar duración personalizada
+const _originalToast = toast;
+function toast(msg, duration) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), duration || 3000);
 }
 </script>
 </body>
