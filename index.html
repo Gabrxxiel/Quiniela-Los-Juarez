@@ -1383,7 +1383,6 @@ function renderLeaderboard() {
   ${acumuladoFinal > 0 ? `<div style="background:var(--red-light);border-radius:var(--radius-sm);padding:8px 12px;font-size:12px;color:var(--red);font-weight:600;margin-bottom:1rem;">⚠️ Q${acumuladoFinal.toFixed(2)} acumulados para la Final por partidos sin acertantes</div>` : ""}`;
 
   // Tabla ranking
-  const { detalleByMatch } = calcSharedPool();
   const board = PLAYERS.map(name => {
     let aciertos = 0, jugadoTotal = 0, partidosJugados = 0;
     PHASES.forEach(ph => {
