@@ -1023,9 +1023,12 @@ async function syncAll() {
 
     state.players = data.players || [];
 
-    // Merge picks remotos con locales (local gana si ya existe)
+    // Merge picks remotos con locales — y marcar cuáles vinieron de Sheets
+    if (!state._picksFromSheets) state._picksFromSheets = {};
     (data.picks || []).forEach(p => {
       const key = `${p.jugador}|${p.partido_id}`;
+      // Marcar como confirmado en Sheets
+      if (p.ganador) state._picksFromSheets[key] = true;
       if (!state.picks[key]) {
         state.picks[key] = {
           ganador:         p.ganador,
@@ -1139,8 +1142,12 @@ function renderQuiniela() {
     const pick    = state.picks[key] || {};
     const res     = state.results[m.id];
     const started = matchStarted(m);
+
+    // Fuente de verdad: si el pick ya existe en Sheets (sincronizado) → enviado
+    const pickExistsInSheets = !!(pick.ganador && state._picksFromSheets?.[key]);
     const sentMatchKey = `sentmatch|${pid}|${m.id}`;
-    const matchSent = !!state.sent?.[sentMatchKey];
+    const matchSent = !!state.sent?.[sentMatchKey] || pickExistsInSheets;
+
     const editingKey = `editing|${pid}|${m.id}`;
     const isEditing = !!state.sent?.[editingKey];
 
@@ -1787,8 +1794,10 @@ async function savePickSingle(pid, mid) {
 
   if (res.ok) {
     if (!state.sent) state.sent = {};
-    // Marcar este partido como enviado y salir de modo edición
+    if (!state._picksFromSheets) state._picksFromSheets = {};
+    // Marcar como guardado en Sheets — fuente de verdad
     state.sent[`sentmatch|${pid}|${mid}`] = true;
+    state._picksFromSheets[`${pid}|${mid}`] = true;
     delete state.sent[`editing|${pid}|${mid}`];
     saveLocal();
     renderQuiniela();
@@ -1799,8 +1808,16 @@ async function savePickSingle(pid, mid) {
 }
 
 function editPickSingle(pid, mid) {
+  const m = state.matches.find(x => x.id === mid);
+  if (!m || matchStarted(m)) {
+    toast("El partido ya inició — no se puede modificar");
+    return;
+  }
+  if (!confirm("¿Seguro que querés cambiar tu predicción? Deberás volver a confirmarla.")) return;
   if (!state.sent) state.sent = {};
   state.sent[`editing|${pid}|${mid}`] = true;
+  // Al editar, quitar el flag de Sheets para que no se rebloquee automáticamente
+  if (state._picksFromSheets) delete state._picksFromSheets[`${pid}|${mid}`];
   saveLocal();
   renderQuiniela();
 }
