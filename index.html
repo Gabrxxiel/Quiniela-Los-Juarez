@@ -702,7 +702,14 @@
     <div id="phase-summary"></div>
 
     <!-- Ranking -->
-    <div class="card-title">Clasificación general</div>
+    <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+      Clasificación general
+      <button onclick="refreshLeaderboard()" id="refresh-lb-btn"
+        style="font-size:12px;font-weight:500;background:none;border:1px solid var(--border-md);
+               color:var(--text-2);padding:4px 12px;border-radius:20px;cursor:pointer;">
+        ↻ Actualizar
+      </button>
+    </div>
     <div class="card" style="padding:0 0 2px;overflow:hidden;">
       <table class="lb-table" id="lb-table">
         <thead>
@@ -940,6 +947,7 @@ let state = {
   picks: {},
   players: [],
   sent: {},
+  rankings: {},  // posiciones anteriores desde Sheets { nombre: { posicion, ganancia, recibido } }
 };
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -1021,7 +1029,8 @@ async function syncAll() {
       };
     });
 
-    state.players = data.players || [];
+    state.players  = data.players  || [];
+    state.rankings = data.rankings || {};  // posiciones anteriores desde Sheets
 
     // Merge picks remotos con locales — y marcar cuáles vinieron de Sheets
     if (!state._picksFromSheets) state._picksFromSheets = {};
@@ -1361,6 +1370,14 @@ function calcSharedPool() {
   return { ganancia, acumuladoFinal, detalleByMatch };
 }
 
+async function refreshLeaderboard() {
+  const btn = document.getElementById("refresh-lb-btn");
+  if (btn) { btn.textContent = "⏳"; btn.disabled = true; }
+  await syncAll();
+  renderLeaderboard();
+  if (btn) { btn.textContent = "↻ Actualizar"; btn.disabled = false; }
+}
+
 function renderLeaderboard() {
   const phase = PHASES.find(p => p.id === state.activePhase);
   const { ganancia, acumuladoFinal, detalleByMatch } = calcSharedPool();
@@ -1420,8 +1437,24 @@ function renderLeaderboard() {
   }).sort((a, b) => b.ganancia - a.ganancia || b.recibido - a.recibido || b.aciertos - a.aciertos);
 
   const medals = ["🥇","🥈","🥉"];
+  const hasResults = state.matches.some(m => state.results[m.id]);
+
   document.getElementById("lb-body").innerHTML = board.map((p, i) => {
-    const medal  = medals[i] || `<span style="color:var(--text-3);font-size:12px;">${i+1}</span>`;
+    const pos     = i + 1;
+    const prev    = state.rankings[p.name];
+    let movTag = "";
+    if (prev && hasResults) {
+      const prevPos = prev.posicion;
+      if (pos < prevPos) {
+        movTag = `<span style="color:#1D9E75;font-size:11px;font-weight:700;">▲${prevPos - pos}</span>`;
+      } else if (pos > prevPos) {
+        movTag = `<span style="color:#D85A30;font-size:11px;font-weight:700;">▼${pos - prevPos}</span>`;
+      } else {
+        movTag = `<span style="color:var(--text-3);font-size:11px;">—</span>`;
+      }
+    }
+
+    const medal  = medals[i] || `<span style="color:var(--text-3);font-size:12px;">${pos}</span>`;
     const ganCls = p.ganancia > 0 ? "gana-pos" : p.ganancia < 0 ? "gana-neg" : "gana-neu";
     const ganStr = p.ganancia > 0 ? `+Q${p.ganancia.toFixed(2)}`
                  : p.ganancia < 0 ? `-Q${Math.abs(p.ganancia).toFixed(2)}`
@@ -1429,7 +1462,10 @@ function renderLeaderboard() {
     return `<tr>
       <td style="text-align:center;font-size:14px;">${medal}</td>
       <td>
-        <div style="font-size:13px;font-weight:600;">${p.name}</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:13px;font-weight:600;">${p.name}</span>
+          ${movTag}
+        </div>
         ${p.partidosJugados > 0 ? `<div style="font-size:10px;color:var(--text-3);">${p.partidosJugados} partido${p.partidosJugados !== 1 ? "s" : ""} jugado${p.partidosJugados !== 1 ? "s" : ""}</div>` : ""}
       </td>
       <td style="text-align:center;font-weight:700;font-size:15px;color:var(--green-dark);">${p.aciertos}</td>
