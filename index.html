@@ -1032,19 +1032,25 @@ async function syncAll() {
     state.players  = data.players  || [];
     state.rankings = data.rankings || {};  // posiciones anteriores desde Sheets
 
-    // Merge picks remotos con locales — y marcar cuáles vinieron de Sheets
+    // Merge picks — Sheets es la fuente de verdad para todos
+    // Solo se respeta el local si el jugador activo está en modo edición
     if (!state._picksFromSheets) state._picksFromSheets = {};
+    const activeName = state.selectedPlayer !== null ? PLAYERS[state.selectedPlayer] : null;
+
     (data.picks || []).forEach(p => {
       const key = `${p.jugador}|${p.partido_id}`;
-      // Marcar como confirmado en Sheets
       if (p.ganador) state._picksFromSheets[key] = true;
-      if (!state.picks[key]) {
-        state.picks[key] = {
-          ganador:         p.ganador,
-          goles_local:     p.goles_local !== "" ? Number(p.goles_local) : "",
-          goles_visitante: p.goles_visitante !== "" ? Number(p.goles_visitante) : "",
-        };
-      }
+
+      // Solo preservar local si es el jugador activo en modo edición
+      const isEditing = state.sent?.[`editing|${p.jugador}|${p.partido_id}`];
+      if (p.jugador === activeName && isEditing) return;
+
+      // Sheets gana siempre para los demás
+      state.picks[key] = {
+        ganador:         p.ganador,
+        goles_local:     p.goles_local !== "" ? Number(p.goles_local) : "",
+        goles_visitante: p.goles_visitante !== "" ? Number(p.goles_visitante) : "",
+      };
     });
 
     // Limpiar flag sent si hay partidos nuevos sin pick
