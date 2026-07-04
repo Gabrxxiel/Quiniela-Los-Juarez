@@ -744,13 +744,22 @@
           <div class="form-label">Fecha a buscar</div>
           <input class="form-inp" type="date" id="search-date" />
         </div>
-        <div style="display:flex;align-items:flex-end;">
-          <button class="btn-search" id="btn-search-matches" onclick="fetchMatches()" style="width:100%;padding:9px;font-size:13px;">
-            🔍 Buscar partidos
-          </button>
+        <div>
+          <div class="form-label">Fase</div>
+          <select class="form-inp" id="search-fase">
+            <option value="r16">16avos · Q2.50</option>
+            <option value="r8">Octavos · Q5.00</option>
+            <option value="qf">Cuartos · Q7.50</option>
+            <option value="sf">Semis · Q15.00</option>
+            <option value="f3">3er lugar · Q15.00</option>
+            <option value="final">Final · Q25.00</option>
+          </select>
         </div>
       </div>
-      <div id="search-matches-status" style="font-size:12px;color:var(--text-3);min-height:16px;margin-bottom:4px;"></div>
+      <button class="btn-search" id="btn-search-matches" onclick="fetchMatches()" style="width:100%;padding:9px;font-size:13px;">
+        🔍 Buscar partidos
+      </button>
+      <div id="search-matches-status" style="font-size:12px;color:var(--text-3);min-height:16px;margin-top:8px;margin-bottom:4px;"></div>
       <div id="found-matches-list"></div>
     </div>
 
@@ -761,9 +770,20 @@
         <div style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;color:var(--text-3);font-weight:700;">vs</div>
         <div><div class="form-label">Visitante</div><input class="form-inp" id="f-away" placeholder="Ej. Argentina" /></div>
       </div>
-      <div class="form-grid-2" style="margin-bottom:12px;">
+      <div class="form-grid-2" style="margin-bottom:10px;">
         <div><div class="form-label">Fecha</div><input class="form-inp" type="date" id="f-date" /></div>
         <div><div class="form-label">Hora</div><input class="form-inp" type="time" id="f-time" value="18:00" /></div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div class="form-label">Fase</div>
+        <select class="form-inp" id="f-fase">
+          <option value="r16">16avos de final · Q2.50</option>
+          <option value="r8">Octavos de final · Q5.00</option>
+          <option value="qf">Cuartos de final · Q7.50</option>
+          <option value="sf">Semifinales · Q15.00</option>
+          <option value="f3">3er lugar · Q15.00</option>
+          <option value="final">Final · Q25.00</option>
+        </select>
       </div>
       <button class="btn-green" onclick="addMatch()">+ Agregar partido</button>
     </div>
@@ -1319,18 +1339,27 @@ function calcSharedPool() {
     const rWinner   = _actualWinner(res);
     const sePenales = res.penal_winner === "home" || res.penal_winner === "away";
 
-    // Quién acertó el marcador exacto de 120 min (no afectado por penales)
+    // Quién acertó el marcador exacto de 120 min
     const exactos = PLAYERS.filter(name => {
       const pick = state.picks[`${name}|${m.id}`];
-      return pick &&
-             Number(pick.goles_local)     === Number(res.goles_local) &&
-             Number(pick.goles_visitante) === Number(res.goles_visitante);
+      if (!pick) return false;
+      const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? Number(pick.goles_local) : null;
+      const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? Number(pick.goles_visitante) : null;
+      return gl !== null && ga !== null &&
+             gl === Number(res.goles_local) &&
+             ga === Number(res.goles_visitante);
     });
 
-    // Quién acertó el ganador real (incluye penales)
+    // Quién acertó el ganador — calculado desde el marcador del pick
     const ganadores = PLAYERS.filter(name => {
       const pick = state.picks[`${name}|${m.id}`];
-      return pick && pick.ganador === rWinner;
+      if (!pick) return false;
+      const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? Number(pick.goles_local) : null;
+      const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? Number(pick.goles_visitante) : null;
+      const pickWinner = gl !== null && ga !== null
+        ? (gl > ga ? "home" : ga > gl ? "away" : "draw")
+        : pick.ganador;
+      return pickWinner === rWinner;
     });
 
     let premio = 0, tipo = "", ganadores_reparto = [];
@@ -1506,14 +1535,21 @@ function renderResultados() {
       const pick = state.picks[`${name}|${m.id}`];
       let badge = "", badgeCls = "res-none", scoreStr = "Sin predicción";
 
-      if (pick && pick.ganador) {
-        const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? pick.goles_local : "?";
-        const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? pick.goles_visitante : "?";
-        scoreStr = `${gl} : ${ga}`;
-        const correct = pick.ganador === rWinner;
-        const exact   = correct &&
-                        Number(pick.goles_local)     === Number(res.goles_local) &&
-                        Number(pick.goles_visitante) === Number(res.goles_visitante);
+      if (pick && (pick.ganador || (pick.goles_local !== undefined && pick.goles_local !== ""))) {
+        const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? Number(pick.goles_local) : null;
+        const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? Number(pick.goles_visitante) : null;
+        scoreStr = gl !== null && ga !== null ? `${gl} : ${ga}` : "Sin marcador";
+
+        // Calcular ganador desde el marcador del pick (fuente de verdad)
+        const pickWinner = gl !== null && ga !== null
+          ? (gl > ga ? "home" : ga > gl ? "away" : "draw")
+          : pick.ganador;
+
+        const exact   = gl !== null && ga !== null &&
+                        gl === Number(res.goles_local) &&
+                        ga === Number(res.goles_visitante);
+        const correct = pickWinner === rWinner;
+
         if (exact)        { badge = "⚡ Exacto";  badgeCls = "res-exact"; }
         else if (correct) { badge = "✓ Ganador";  badgeCls = "res-winner"; }
         else              { badge = "✗ Fallo";    badgeCls = "res-miss"; }
@@ -1662,6 +1698,8 @@ async function fetchMatches() {
   const btn    = document.getElementById("btn-search-matches");
   const status = document.getElementById("search-matches-status");
   const list   = document.getElementById("found-matches-list");
+  const faseId = document.getElementById("search-fase")?.value || state.activePhase;
+  const fase   = PHASES.find(p => p.id === faseId);
 
   btn.disabled = true;
   btn.textContent = "⏳ Buscando...";
@@ -1670,7 +1708,6 @@ async function fetchMatches() {
 
   const [y, m, d] = dateInput.split("-");
   const fechaLegible = `${d}/${m}/${y}`;
-  const fase = PHASES.find(p => p.id === state.activePhase);
 
   try {
     const raw = await claudeSearch(
@@ -1702,14 +1739,15 @@ async function fetchMatches() {
 }
 
 async function confirmFoundMatches(partidos, fecha) {
-  const list = document.getElementById("found-matches-list");
+  const list   = document.getElementById("found-matches-list");
+  const faseId = document.getElementById("search-fase")?.value || state.activePhase;
   let cargados = 0;
   for (let i = 0; i < partidos.length; i++) {
     const chk = document.getElementById(`fm-${i}`);
     if (!chk?.checked) continue;
     const p  = partidos[i];
     const id = "m_" + Date.now() + "_" + i;
-    const match = { id, fase: state.activePhase, local: p.local, visitante: p.visitante, fecha, hora: p.hora };
+    const match = { id, fase: faseId, local: p.local, visitante: p.visitante, fecha, hora: p.hora };
     const res = await apiPost({ action: "addMatch", ...match });
     if (res.ok) { state.matches.push(match); cargados++; }
     await new Promise(r => setTimeout(r, 200));
@@ -1956,14 +1994,15 @@ async function savePicks() {
 }
 
 async function addMatch() {
-  const home = document.getElementById("f-home").value.trim();
-  const away = document.getElementById("f-away").value.trim();
-  const date = document.getElementById("f-date").value;
-  const time = document.getElementById("f-time").value;
+  const home  = document.getElementById("f-home").value.trim();
+  const away  = document.getElementById("f-away").value.trim();
+  const date  = document.getElementById("f-date").value;
+  const time  = document.getElementById("f-time").value;
+  const fase  = document.getElementById("f-fase")?.value || state.activePhase;
   if (!home || !away) { toast("Ingresá los dos equipos"); return; }
 
-  const id = "m_" + Date.now();
-  const match = { id, fase: state.activePhase, local: home, visitante: away, fecha: date, hora: time };
+  const id    = "m_" + Date.now();
+  const match = { id, fase, local: home, visitante: away, fecha: date, hora: time };
 
   const res = await apiPost({ action: "addMatch", ...match });
   if (res.error) { toast("Error: " + res.error); return; }
@@ -1972,7 +2011,7 @@ async function addMatch() {
   document.getElementById("f-home").value = "";
   document.getElementById("f-away").value = "";
   renderAdmin();
-  toast(`Partido agregado: ${home} vs ${away}`);
+  toast(`Partido agregado: ${home} vs ${away} (${PHASES.find(p=>p.id===fase)?.label || fase})`);
 }
 
 async function deleteMatch(id) {
@@ -2042,13 +2081,23 @@ async function saveResult(mid, local, visitante) {
 // ── HELPERS ───────────────────────────────────────────────────
 function evalPick(pick, res, cost, mid) {
   const rWinner = _actualWinner(res);
-  const exact  = Number(pick.goles_local) === Number(res.goles_local) &&
-                 Number(pick.goles_visitante) === Number(res.goles_visitante);
-  const winner = pick.ganador === rWinner;
 
-  // Obtener el detalle real del reparto si está disponible
+  const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? Number(pick.goles_local) : null;
+  const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? Number(pick.goles_visitante) : null;
+
+  // Exacto: marcador del pick igual al resultado oficial
+  const exact = gl !== null && ga !== null &&
+                gl === Number(res.goles_local) &&
+                ga === Number(res.goles_visitante);
+
+  // Ganador: calculado desde el marcador del pick (fuente de verdad), con fallback a pick.ganador
+  const pickWinner = gl !== null && ga !== null
+    ? (gl > ga ? "home" : ga > gl ? "away" : "draw")
+    : pick.ganador;
+  const winner = pickWinner === rWinner;
+
   const { detalleByMatch } = calcSharedPool();
-  const det = detalleByMatch[mid];
+  const det    = detalleByMatch[mid];
   const premio = det ? det.premio : 0;
   const tipo   = det ? det.tipo   : "";
 
@@ -2075,12 +2124,18 @@ function calcPlayerScore(name) {
   state.matches.forEach(m => {
     const res  = state.results[m.id];
     const pick = state.picks[`${name}|${m.id}`];
-    if (!res || !pick || !pick.ganador) return;
-    const rWinner = _actualWinner(res);
-    const correct = pick.ganador === rWinner;
-    // El marcador exacto siempre se evalúa contra el resultado de 120 min, nunca penales
-    const exact   = Number(pick.goles_local)     === Number(res.goles_local) &&
-                    Number(pick.goles_visitante) === Number(res.goles_visitante);
+    if (!res || !pick) return;
+    const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? Number(pick.goles_local) : null;
+    const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? Number(pick.goles_visitante) : null;
+    if (gl === null && ga === null && !pick.ganador) return;
+    const rWinner    = _actualWinner(res);
+    const pickWinner = gl !== null && ga !== null
+      ? (gl > ga ? "home" : ga > gl ? "away" : "draw")
+      : pick.ganador;
+    const correct = pickWinner === rWinner;
+    const exact   = gl !== null && ga !== null &&
+                    gl === Number(res.goles_local) &&
+                    ga === Number(res.goles_visitante);
     if (exact)        pts += 2;
     else if (correct) pts += 1;
   });
