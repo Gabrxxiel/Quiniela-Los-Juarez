@@ -1413,8 +1413,29 @@ async function refreshLeaderboard() {
   if (btn) { btn.textContent = "↻ Actualizar"; btn.disabled = false; }
 }
 
+// Detecta automáticamente qué fase está en juego:
+// 1. La fase con partidos cargados y sin resultado aún (en progreso)
+// 2. Si todas tienen resultado, la última fase con partidos
+function detectActivePhase() {
+  const ORDER = ["r16","r8","qf","sf","f3","final"];
+  // Buscar la primera fase que tenga partidos cargados pero no todos con resultado
+  for (const faseId of ORDER) {
+    const phMatches = state.matches.filter(m => String(m.fase) === faseId);
+    if (phMatches.length === 0) continue;
+    const pending = phMatches.filter(m => !state.results[m.id]);
+    if (pending.length > 0) return faseId; // tiene partidos pendientes → esta es la activa
+  }
+  // Todas completas → la última con partidos
+  for (let i = ORDER.length - 1; i >= 0; i--) {
+    if (state.matches.some(m => String(m.fase) === ORDER[i])) return ORDER[i];
+  }
+  return "r16";
+}
+
 function renderLeaderboard() {
-  const phase = PHASES.find(p => p.id === state.activePhase);
+  // La fase mostrada en Tabla se detecta automáticamente según partidos en juego
+  const detectedPhaseId = detectActivePhase();
+  const phase = PHASES.find(p => p.id === detectedPhaseId);
   const { ganancia, acumuladoFinal, detalleByMatch } = calcSharedPool();
 
   // Bote total recaudado (partidos con resultado)
@@ -1441,7 +1462,7 @@ function renderLeaderboard() {
       const phWithRes  = phMatches.filter(m => state.results[m.id]);
       const phPool     = phMatches.length * ph.cost * PLAYERS.length;
       const phJugado   = phWithRes.length * ph.cost * PLAYERS.length;
-      const isActive   = ph.id === state.activePhase;
+      const isActive   = ph.id === detectedPhaseId;
       const isFinal    = ph.id === "final";
       return `<div class="phase-sum-card ${isActive ? "active-phase" : ""}">
         <div class="psf-label">${ph.label}</div>
