@@ -2130,6 +2130,12 @@ function setPenalWinner(mid, side) {
 }
 
 async function saveResult(mid, local, visitante) {
+  const m = state.matches.find(x => x.id === mid);
+  if (!m || !matchStarted(m)) {
+    toast("El partido aún no ha iniciado — no se puede cargar el resultado");
+    return;
+  }
+
   const h = document.getElementById(`rh-${mid}`).value;
   const a = document.getElementById(`ra-${mid}`).value;
   if (h === "" || a === "") { toast("Ingresá el marcador completo"); return; }
