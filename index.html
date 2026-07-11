@@ -550,17 +550,6 @@
   .res-match-title { font-size: 14px; font-weight: 600; }
   .res-match-score { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
   .res-match-meta  { font-size: 11px; opacity: .7; margin-top: 2px; }
-  .res-payout-banner {
-    padding: 8px 1rem;
-    font-size: 12px;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .res-payout-banner.exacto    { background: var(--green-light); color: var(--green-dark); }
-  .res-payout-banner.ganador   { background: var(--blue-light);  color: var(--blue); }
-  .res-payout-banner.acumulado { background: var(--red-light);   color: var(--red); }
   .res-picks-grid  {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -688,9 +677,6 @@
                background:var(--surface);color:var(--text);cursor:pointer;">
         <option value="">— Seleccioná tu nombre —</option>
       </select>
-    </div>
-    <div style="background:var(--blue-light);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:1.25rem;font-size:12px;color:var(--blue);line-height:1.5;">
-      ⏱ <strong>Desde cuartos de final en adelante</strong> (cuartos, semis, 3er lugar y final) la predicción de cada partido se cierra <strong>2 horas antes</strong> de su inicio. En 16avos y octavos se cierra justo cuando inicia el partido.
     </div>
     <div id="quiniela-body"></div>
   </div>
@@ -855,7 +841,7 @@
         <div class="instr-num">4</div>
         <div>
           <div class="instr-title">Una vez iniciado el partido — bloqueado</div>
-          <div class="instr-desc">En 16avos y octavos, cuando llega la hora de inicio aparece <span class="itag ir" style="font-size:11px;">🔴 En juego</span> y ya no se puede modificar la predicción. <strong style="color:var(--text);">Desde cuartos de final en adelante</strong> (cuartos, semis, 3er lugar y final) la predicción se cierra <strong style="color:var(--text);">2 horas antes</strong> del partido — aparece <span class="itag id" style="font-size:11px;">🔒 Cerrado</span> y queda bloqueada aunque el partido todavía no haya empezado.</div>
+          <div class="instr-desc">Cuando llega la hora de inicio aparece <span class="itag ir" style="font-size:11px;">🔴 En juego</span> y ya no se puede modificar la predicción.</div>
         </div>
       </div>
     </div>
@@ -948,6 +934,29 @@
   <div style="font-size:12px;color:var(--text-2);margin-top:4px;font-weight:500;">Created by <span style="color:var(--green);font-weight:600;">Gabriel López</span></div>
 </footer>
 
+<!-- Modal PIN -->
+<div id="pin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border-radius:var(--radius);padding:1.5rem;width:300px;max-width:90vw;text-align:center;">
+    <div style="font-size:20px;margin-bottom:8px;">🔐</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px;">PIN de administrador</div>
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:16px;">Ingresá el PIN para desbloquear esta predicción</div>
+    <input id="pin-input" type="password" inputmode="numeric" maxlength="8"
+      style="width:100%;padding:12px;text-align:center;font-size:22px;letter-spacing:6px;
+             border:1.5px solid var(--border-md);border-radius:var(--radius-sm);
+             background:var(--bg);color:var(--text);margin-bottom:12px;"
+      placeholder="••••••••" onkeydown="if(event.key==='Enter') confirmPin()" />
+    <div id="pin-error" style="font-size:12px;color:var(--red);min-height:16px;margin-bottom:10px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="closePinModal()"
+        style="flex:1;padding:10px;border:1px solid var(--border-md);border-radius:var(--radius-sm);
+               background:none;color:var(--text-2);font-size:13px;cursor:pointer;">Cancelar</button>
+      <button onclick="confirmPin()"
+        style="flex:1;padding:10px;background:var(--green);border:none;border-radius:var(--radius-sm);
+               color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Desbloquear</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -968,10 +977,6 @@ const PLAYERS = [
   "Gabo","Regi","Braulio",
   "Josué","Majo"
 ];
-
-// Fases eliminatorias: sin empate, y la predicción se cierra 2 horas antes del partido
-const ELIM_PHASES = ["qf","sf","f3","final"];
-const PICK_LOCK_HOURS_ELIM = 2;
 
 const COLORS = ["#9FE1CB","#FAC775","#B5D4F4","#F4C0D1","#C0DD97",
                 "#F5C4B3","#CECBF6","#9FE1CB","#FAC775","#B5D4F4",
@@ -1195,7 +1200,6 @@ function renderQuiniela() {
     const pick    = state.picks[key] || {};
     const res     = state.results[m.id];
     const started = matchStarted(m);
-    const pickLocked = isPickLocked(m);
 
     // Fuente de verdad: si el pick ya existe en Sheets (sincronizado) → enviado
     const pickExistsInSheets = !!(pick.ganador && state._picksFromSheets?.[key]);
@@ -1205,15 +1209,14 @@ function renderQuiniela() {
     const editingKey = `editing|${pid}|${m.id}`;
     const isEditing = !!state.sent?.[editingKey];
 
-    // Bloqueado definitivamente: tiene resultado oficial, o ya pasó la hora límite de predicción
-    // (hora de inicio normalmente; 2 horas antes del inicio desde cuartos de final)
-    const hardLocked = !!res || pickLocked;
+    // Bloqueado definitivamente: ya empezó o tiene resultado oficial
+    const hardLocked = !!res || started;
     // Bloqueado visualmente: ya envió este partido y no está en modo edición
     const locked = hardLocked || (matchSent && !isEditing);
 
     const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? parseInt(pick.goles_local) : null;
     const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? parseInt(pick.goles_visitante) : null;
-    const esEliminatoria = ELIM_PHASES.includes(String(m.fase));
+    const esEliminatoria = ["qf","sf","f3","final"].includes(String(m.fase));
     const empatadoEnPick = gl !== null && ga !== null && gl === ga;
 
     const autoWinner = (gl !== null && ga !== null)
@@ -1260,8 +1263,6 @@ function renderQuiniela() {
       statusBadge = `<span class="locked-badge">🔒 Resultado oficial</span>`;
     } else if (started) {
       statusBadge = `<span class="locked-badge" style="background:var(--red-light);color:var(--red);border-color:var(--red);">🔴 En juego</span>`;
-    } else if (pickLocked) {
-      statusBadge = `<span class="locked-badge" style="background:var(--gold-light);color:var(--gold);border-color:var(--gold);">🔒 Cerrado</span>`;
     } else if (matchSent && !isEditing) {
       statusBadge = `<span class="locked-badge sent-badge">✅ Confirmado</span>`;
     } else if (isEditing) {
@@ -1270,11 +1271,14 @@ function renderQuiniela() {
       statusBadge = `<span style="font-size:10px;color:var(--green);font-weight:600;">Q${phase.cost.toFixed(2)} · ${phase.label}</span>`;
     }
 
-    // Countdown — cuenta hasta la hora límite de predicción (2h antes del partido desde cuartos)
+    // Countdown
     let countdownHtml = "";
     if (!hardLocked) {
       try {
-        const diff = pickDeadlineDate(m) - new Date();
+        const fecha = String(m.fecha).split("T")[0];
+        const hora  = fmtHora(m.hora);
+        const matchDate = new Date(`${fecha}T${hora}:00`);
+        const diff = matchDate - new Date();
         if (diff > 0) {
           const hh = Math.floor(diff / 3600000);
           const mm = Math.floor((diff % 3600000) / 60000);
@@ -1291,7 +1295,7 @@ function renderQuiniela() {
         matchBtn = `<button class="btn-match-confirm" onclick="savePickSingle('${pid}','${m.id}')">✓ Confirmar predicción</button>`;
       } else {
         // Ya confirmó, puede editar
-        matchBtn = `<button class="btn-match-edit" onclick="editPickSingle('${pid}','${m.id}')">✏️ Cambiar predicción</button>`;
+        matchBtn = `<button class="btn-match-edit" onclick="requestPinUnlock('${pid}','${m.id}')">🔐 Cambiar predicción</button>`;
       }
     }
 
@@ -1565,28 +1569,11 @@ function renderResultados() {
     return;
   }
 
-  const { detalleByMatch } = calcSharedPool();
-
   body.innerHTML = matchesWithRes.map(m => {
     const res   = state.results[m.id];
     const phase = PHASES.find(p => p.id === String(m.fase));
     const rWinner = res.goles_local > res.goles_visitante ? "home"
                   : res.goles_visitante > res.goles_local  ? "away" : "draw";
-
-    // Reparto del bote de este partido
-    const det = detalleByMatch[m.id];
-    let payoutHtml = "";
-    if (det) {
-      if (det.tipo === "exacto") {
-        payoutHtml = `<div class="res-payout-banner exacto">⚡ ${det.ganadores.length} acertaron el marcador exacto · cada uno recibe Q${det.premio.toFixed(2)}</div>`;
-      } else if (det.tipo === "ganador") {
-        const nota = det.penales ? " (40% del bote — el resto se acumula al bote de la Final)" : "";
-        payoutHtml = `<div class="res-payout-banner ganador">✓ ${det.ganadores.length} acertaron el ganador · cada uno recibe Q${det.premio.toFixed(2)}${nota}</div>`;
-      } else {
-        const isFinal = String(m.fase) === "final";
-        payoutHtml = `<div class="res-payout-banner acumulado">✗ Nadie acertó${isFinal ? "" : ` · Q${det.bote.toFixed(2)} se acumulan al bote de la Final`}</div>`;
-      }
-    }
 
     const picksHtml = PLAYERS.map((name, i) => {
       const pick = state.picks[`${name}|${m.id}`];
@@ -1630,7 +1617,6 @@ function renderResultados() {
         </div>
         <div class="res-match-score">${res.goles_local} – ${res.goles_visitante}</div>
       </div>
-      ${payoutHtml}
       <div class="res-picks-grid">${picksHtml}</div>
     </div>`;
   }).join("");
@@ -1698,7 +1684,7 @@ function renderAdmin() {
         ${missing.length > 0 ? `<div style="font-size:11px;color:var(--red);margin-top:6px;">⚠️ Faltan: ${missing.join(", ")}</div>` : `<div style="font-size:11px;color:var(--green);margin-top:6px;">✓ Todos enviaron</div>`}
       </div>`;
 
-    const esEliminatoria = ELIM_PHASES.includes(m.fase);
+    const esEliminatoria = ["qf","sf","f3","final"].includes(m.fase);
 
     return `
     <div class="card" id="rf-${m.id}">
@@ -1903,27 +1889,6 @@ function matchStarted(m) {
   } catch(e) { return false; }
 }
 
-// Hora límite para cargar/modificar la predicción: en fases eliminatorias (cuartos en
-// adelante) cierra 2 horas antes del partido; en las demás fases cierra al iniciar.
-function pickDeadlineDate(m) {
-  const fecha = String(m.fecha).split("T")[0];
-  const hora  = fmtHora(m.hora);
-  const matchDate = new Date(`${fecha}T${hora}:00`);
-  if (ELIM_PHASES.includes(String(m.fase))) {
-    return new Date(matchDate.getTime() - PICK_LOCK_HOURS_ELIM * 3600000);
-  }
-  return matchDate;
-}
-
-function isPickLocked(m) {
-  try {
-    const fecha = String(m.fecha).split("T")[0];
-    const hora  = fmtHora(m.hora);
-    if (!fecha || !hora || hora === "—") return false;
-    return pickDeadlineDate(m) <= new Date();
-  } catch(e) { return false; }
-}
-
 function resetSent(pid) {
   if (!confirm("¿Seguro que querés editar tu quiniela?")) return;
   const sentKey = `sent|${pid}|${state.activePhase}`;
@@ -1938,13 +1903,6 @@ async function savePickSingle(pid, mid) {
 
   const m = state.matches.find(x => x.id === mid);
   if (!m) return;
-  if (isPickLocked(m)) {
-    toast(ELIM_PHASES.includes(String(m.fase))
-      ? "Predicción cerrada — faltan menos de 2 horas para el partido"
-      : "El partido ya inició — no se puede modificar");
-    renderQuiniela();
-    return;
-  }
 
   const res = await apiPost({
     action: "savePick",
@@ -1973,13 +1931,50 @@ async function savePickSingle(pid, mid) {
   }
 }
 
+// ── PIN DE ADMIN ──────────────────────────────────────────────
+const ADMIN_PIN = "67678787";
+let _pinPid = null, _pinMid = null;
+
+function requestPinUnlock(pid, mid) {
+  const m = state.matches.find(x => x.id === mid);
+  if (!m || matchStarted(m)) {
+    toast("El partido ya inició — no se puede modificar");
+    return;
+  }
+  _pinPid = pid;
+  _pinMid = mid;
+  document.getElementById("pin-input").value = "";
+  document.getElementById("pin-error").textContent = "";
+  const modal = document.getElementById("pin-modal");
+  modal.style.display = "flex";
+  setTimeout(() => document.getElementById("pin-input").focus(), 100);
+}
+
+function confirmPin() {
+  const input = document.getElementById("pin-input").value.trim();
+  const error = document.getElementById("pin-error");
+  if (input !== ADMIN_PIN) {
+    error.textContent = "PIN incorrecto — intentá de nuevo";
+    document.getElementById("pin-input").value = "";
+    document.getElementById("pin-input").focus();
+    return;
+  }
+  closePinModal();
+  editPickSingle(_pinPid, _pinMid);
+  _pinPid = null;
+  _pinMid = null;
+}
+
+function closePinModal() {
+  document.getElementById("pin-modal").style.display = "none";
+  document.getElementById("pin-input").value = "";
+  document.getElementById("pin-error").textContent = "";
+}
+
 function editPickSingle(pid, mid) {
   const m = state.matches.find(x => x.id === mid);
-  if (!m || isPickLocked(m)) {
-    toast(m && ELIM_PHASES.includes(String(m.fase))
-      ? "Predicción cerrada — faltan menos de 2 horas para el partido"
-      : "El partido ya inició — no se puede modificar");
-    renderQuiniela();
+  if (!m || matchStarted(m)) {
+    toast("El partido ya inició — no se puede modificar");
     return;
   }
   if (!confirm("¿Seguro que querés cambiar tu predicción? Deberás volver a confirmarla.")) return;
@@ -2140,7 +2135,7 @@ async function saveResult(mid, local, visitante) {
   if (h === "" || a === "") { toast("Ingresá el marcador completo"); return; }
 
   const fase = state.matches.find(m => m.id === mid)?.fase || state.activePhase;
-  const esEliminatoria = ELIM_PHASES.includes(fase);
+  const esEliminatoria = ["qf","sf","f3","final"].includes(fase);
   const empatado = parseInt(h) === parseInt(a);
 
   let penalWinner = null;
