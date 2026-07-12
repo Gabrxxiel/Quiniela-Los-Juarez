@@ -1572,19 +1572,27 @@ function renderResultados() {
   body.innerHTML = matchesWithRes.map(m => {
     const res   = state.results[m.id];
     const phase = PHASES.find(p => p.id === String(m.fase));
-    const rWinner = res.goles_local > res.goles_visitante ? "home"
-                  : res.goles_visitante > res.goles_local  ? "away" : "draw";
+    const { detalleByMatch } = calcSharedPool();
+    const det = detalleByMatch[m.id];
+    const rWinner = _actualWinner(res);
+
+    // Info del bote de este partido
+    const boteInfo = det ? (() => {
+      if (det.tipo === "acumulado") return `<div style="font-size:11px;color:var(--red);padding:6px 12px;background:var(--red-light);border-radius:var(--radius-sm);margin:0 0 8px;">⚠️ Bote Q${det.bote.toFixed(2)} acumulado a la Final — nadie acertó</div>`;
+      if (det.tipo === "exacto")   return `<div style="font-size:11px;color:var(--green-dark);padding:6px 12px;background:var(--green-light);border-radius:var(--radius-sm);margin:0 0 8px;">⚡ Bote Q${det.bote.toFixed(2)} — ${det.ganadores.length} marcador${det.ganadores.length!==1?"es":""}  exacto${det.ganadores.length!==1?"s":""} → Q${det.premio.toFixed(2)} c/u</div>`;
+      if (det.tipo === "ganador" && det.penales) return `<div style="font-size:11px;color:var(--gold);padding:6px 12px;background:var(--gold-light);border-radius:var(--radius-sm);margin:0 0 8px;">⚽ Penales — 40% del bote (Q${(det.bote*0.4).toFixed(2)}) → Q${det.premio.toFixed(2)} c/u entre ${det.ganadores.length}</div>`;
+      return `<div style="font-size:11px;color:var(--blue);padding:6px 12px;background:var(--blue-light);border-radius:var(--radius-sm);margin:0 0 8px;">✓ Bote Q${det.bote.toFixed(2)} — ${det.ganadores.length} ganador${det.ganadores.length!==1?"es":""} correcto${det.ganadores.length!==1?"s":""} → Q${det.premio.toFixed(2)} c/u</div>`;
+    })() : "";
 
     const picksHtml = PLAYERS.map((name, i) => {
       const pick = state.picks[`${name}|${m.id}`];
-      let badge = "", badgeCls = "res-none", scoreStr = "Sin predicción";
+      let badge = "", badgeCls = "res-none", scoreStr = "Sin predicción", montoStr = "";
 
       if (pick && (pick.ganador || (pick.goles_local !== undefined && pick.goles_local !== ""))) {
         const gl = pick.goles_local !== undefined && pick.goles_local !== "" ? Number(pick.goles_local) : null;
         const ga = pick.goles_visitante !== undefined && pick.goles_visitante !== "" ? Number(pick.goles_visitante) : null;
         scoreStr = gl !== null && ga !== null ? `${gl} : ${ga}` : "Sin marcador";
 
-        // Calcular ganador desde el marcador del pick (fuente de verdad)
         const pickWinner = gl !== null && ga !== null
           ? (gl > ga ? "home" : ga > gl ? "away" : "draw")
           : pick.ganador;
@@ -1597,6 +1605,11 @@ function renderResultados() {
         if (exact)        { badge = "⚡ Exacto";  badgeCls = "res-exact"; }
         else if (correct) { badge = "✓ Ganador";  badgeCls = "res-winner"; }
         else              { badge = "✗ Fallo";    badgeCls = "res-miss"; }
+
+        // Mostrar monto recibido si fue ganador o exacto
+        if (det && det.premio > 0 && det.ganadores.includes(name)) {
+          montoStr = `<div style="font-size:11px;font-weight:700;color:var(--green-dark);">+Q${det.premio.toFixed(2)}</div>`;
+        }
       }
 
       return `<div class="res-pick-cell">
@@ -1605,6 +1618,7 @@ function renderResultados() {
           <div class="res-pick-name">${name}</div>
           <div class="res-pick-score">${scoreStr}</div>
           ${badge ? `<div class="res-pick-badge ${badgeCls}">${badge}</div>` : ""}
+          ${montoStr}
         </div>
       </div>`;
     }).join("");
@@ -1615,8 +1629,9 @@ function renderResultados() {
           <div class="res-match-title">${m.local} vs ${m.visitante}</div>
           <div class="res-match-meta">📅 ${fmtFecha(m.fecha)} · 🕐 ${fmtHora(m.hora)} · ${phase?.label || ""}</div>
         </div>
-        <div class="res-match-score">${res.goles_local} – ${res.goles_visitante}</div>
+        <div class="res-match-score">${res.goles_local} – ${res.goles_visitante}${res.penal_winner ? `<div style="font-size:11px;opacity:.8;">pen: ${res.penal_winner === "home" ? m.local : m.visitante}</div>` : ""}</div>
       </div>
+      ${boteInfo}
       <div class="res-picks-grid">${picksHtml}</div>
     </div>`;
   }).join("");
