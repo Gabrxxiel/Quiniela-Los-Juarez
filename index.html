@@ -1348,7 +1348,15 @@ function calcSharedPool() {
   let acumuladoFinal = 0;
   const detalleByMatch = {};
 
-  state.matches.forEach(m => {
+  // Ordenar matches por fase para garantizar que el acumulado llega correctamente a la Final
+  const PHASE_ORDER = ["r16","r8","qf","sf","f3","final"];
+  const sortedMatches = [...state.matches].sort((a, b) => {
+    const ia = PHASE_ORDER.indexOf(String(a.fase));
+    const ib = PHASE_ORDER.indexOf(String(b.fase));
+    return ia - ib;
+  });
+
+  sortedMatches.forEach(m => {
     const res = state.results[m.id];
     if (!res) return;
 
