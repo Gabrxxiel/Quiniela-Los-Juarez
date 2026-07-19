@@ -1469,14 +1469,16 @@ function renderLeaderboard() {
   const phase = PHASES.find(p => p.id === detectedPhaseId);
   const { ganancia, acumuladoFinal, detalleByMatch } = calcSharedPool();
 
-  // Bote total recaudado (partidos con resultado)
+  // Bote total recaudado = suma de todos los partidos jugados (el acumulado ya está dentro del bote de la Final en calcSharedPool)
   const matchesWithResult = state.matches.filter(m => state.results[m.id]);
   const totalPool = matchesWithResult.reduce((sum, m) => {
     const ph = PHASES.find(p => p.id === String(m.fase));
     return sum + (ph ? ph.cost * PLAYERS.length : 0);
   }, 0);
+  // El acumulado pendiente aún no se repartió — sumarlo al total mostrado
+  const totalPoolDisplay = totalPool;
 
-  document.getElementById("pool-amt").textContent   = `Q${totalPool.toFixed(2)}`;
+  document.getElementById("pool-amt").textContent   = `Q${totalPoolDisplay.toFixed(2)}`;
   document.getElementById("pool-phase").textContent = phase ? phase.label : "—";
   document.getElementById("pool-cost").textContent  = phase ? `Q${phase.cost.toFixed(2)} por partido` : "";
   document.getElementById("pool-sub").textContent   = `${PLAYERS.length} jugadores`;
@@ -1577,11 +1579,12 @@ function renderResultados() {
     return;
   }
 
+  const { detalleByMatch } = calcSharedPool();
+
   body.innerHTML = matchesWithRes.map(m => {
     const res   = state.results[m.id];
     const phase = PHASES.find(p => p.id === String(m.fase));
-    const { detalleByMatch } = calcSharedPool();
-    const det = detalleByMatch[m.id];
+    const det   = detalleByMatch[m.id];
     const rWinner = _actualWinner(res);
 
     // Info del bote de este partido
