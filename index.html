@@ -1439,7 +1439,6 @@ function calcSharedPool() {
       tipo   = "exacto";
       ganadores_reparto = exactos;
       exactos.forEach(n => ganancia[n] = Math.round((ganancia[n] + premio) * 100) / 100);
-      acumuladoFinal = 0;
     } else if (ganadores.length > 0 && sePenales) {
       // Definido en penales: solo se reparte el 40% del bote entre los que acertaron ganador
       const boteReparto = Math.round(bote * 0.4 * 100) / 100;
@@ -1450,8 +1449,6 @@ function calcSharedPool() {
       ganadores.forEach(n => ganancia[n] = Math.round((ganancia[n] + premio) * 100) / 100);
       if (String(m.fase) !== "final") {
         acumuladoFinal = Math.round((acumuladoFinal + boteAcumula) * 100) / 100;
-      } else {
-        acumuladoFinal = 0;
       }
     } else if (ganadores.length > 0) {
       // Ganó en tiempo regular: reparto normal 100%
@@ -1459,7 +1456,6 @@ function calcSharedPool() {
       tipo   = "ganador";
       ganadores_reparto = ganadores;
       ganadores.forEach(n => ganancia[n] = Math.round((ganancia[n] + premio) * 100) / 100);
-      acumuladoFinal = 0;
     } else {
       // Nadie acertó — se acumula a Final (solo si no es ya la Final)
       if (String(m.fase) !== "final") {
