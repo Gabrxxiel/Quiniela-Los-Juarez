@@ -1177,11 +1177,13 @@ function renderQuiniela() {
     return;
   }
 
-  const pid  = PLAYERS[state.selectedPlayer];
-  const bank = state.bankInfo?.[pid] || {};
+  const pid    = PLAYERS[state.selectedPlayer];
+  const bank   = state.bankInfo?.[pid] || {};
+  const monto  = calcSharedPool().ganancia[pid] || 0;
   const bankHtml = `
     <div style="background:var(--surface);border:1.5px solid var(--border-md);border-radius:var(--radius);padding:14px;margin-bottom:1.25rem;">
-      <div style="font-weight:700;font-size:14px;margin-bottom:8px;">💳 Tus datos bancarios (para recibir tu premio)</div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;">💳 Tus datos bancarios (para recibir tu acumulado)</div>
+      <div style="font-size:13px;color:var(--text-2);margin-bottom:10px;">Monto a recibir hasta ahora: <strong style="color:var(--text);font-size:15px;">Q${monto.toFixed(2)}</strong></div>
       <div style="display:flex;flex-direction:column;gap:8px;">
         <input id="bank-banco" type="text" placeholder="Nombre del banco" value="${(bank.banco||"").replace(/"/g,"&quot;")}"
           style="padding:9px 12px;border:1.5px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
