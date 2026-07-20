@@ -991,6 +991,7 @@ let state = {
   players: [],
   sent: {},
   rankings: {},  // posiciones anteriores desde Sheets { nombre: { posicion, ganancia, recibido } }
+  bankInfo: {},  // datos bancarios por jugador { nombre: { banco, tipo_cuenta, numero_cuenta } }
 };
 
 // ── INIT ──────────────────────────────────────────────────────
@@ -1051,6 +1052,24 @@ async function apiPost(body) {
   return r.json();
 }
 
+async function saveBankInfo() {
+  const pid = PLAYERS[state.selectedPlayer];
+  if (!pid) return;
+  const banco         = document.getElementById("bank-banco").value.trim();
+  const tipo_cuenta    = document.getElementById("bank-tipo").value;
+  const numero_cuenta = document.getElementById("bank-numero").value.trim();
+  const msg = document.getElementById("bank-msg");
+  msg.textContent = "Guardando...";
+  try {
+    await apiPost({ action: "saveBankInfo", jugador: pid, banco, tipo_cuenta, numero_cuenta });
+    state.bankInfo[pid] = { banco, tipo_cuenta, numero_cuenta };
+    msg.textContent = "✅ Guardado";
+    setTimeout(() => { if (msg) msg.textContent = ""; }, 2500);
+  } catch(e) {
+    msg.textContent = "❌ Error al guardar";
+  }
+}
+
 async function syncAll() {
   // Mostrar indicador sutil en el botón sync sin bloquear la UI
   const syncBtn = document.getElementById("sync-btn");
@@ -1074,6 +1093,7 @@ async function syncAll() {
 
     state.players  = data.players  || [];
     state.rankings = data.rankings || {};  // posiciones anteriores desde Sheets
+    state.bankInfo = data.bankInfo || {};  // datos bancarios por jugador
 
     // Merge picks — Sheets es la fuente de verdad para todos
     // Solo se respeta el local si el jugador activo está en modo edición
@@ -1157,6 +1177,26 @@ function renderQuiniela() {
     return;
   }
 
+  const pid  = PLAYERS[state.selectedPlayer];
+  const bank = state.bankInfo?.[pid] || {};
+  const bankHtml = `
+    <div style="background:var(--surface);border:1.5px solid var(--border-md);border-radius:var(--radius);padding:14px;margin-bottom:1.25rem;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;">💳 Tus datos bancarios (para recibir tu premio)</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input id="bank-banco" type="text" placeholder="Nombre del banco" value="${(bank.banco||"").replace(/"/g,"&quot;")}"
+          style="padding:9px 12px;border:1.5px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
+        <select id="bank-tipo" style="padding:9px 12px;border:1.5px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
+          <option value="">— Tipo de cuenta —</option>
+          <option value="Monetaria" ${bank.tipo_cuenta === "Monetaria" ? "selected" : ""}>Monetaria</option>
+          <option value="Ahorro" ${bank.tipo_cuenta === "Ahorro" ? "selected" : ""}>Ahorro</option>
+        </select>
+        <input id="bank-numero" type="text" placeholder="Número de cuenta" value="${(bank.numero_cuenta||"").replace(/"/g,"&quot;")}"
+          style="padding:9px 12px;border:1.5px solid var(--border-md);border-radius:var(--radius-sm);background:var(--bg);color:var(--text);font-size:14px;">
+        <button type="button" onclick="saveBankInfo()" class="btn-green" style="padding:9px;">Guardar datos bancarios</button>
+        <div id="bank-msg" style="font-size:12px;color:var(--green-dark);"></div>
+      </div>
+    </div>`;
+
   const phase = PHASES.find(p => p.id === state.activePhase);
   const now   = new Date();
   const matches = state.matches
@@ -1172,7 +1212,7 @@ function renderQuiniela() {
       return da - db;
     });
 
-  let html = `<div class="phase-row">`;
+  let html = bankHtml + `<div class="phase-row">`;
   PHASES.forEach(p => {
     html += `<button class="phase-pill ${p.id === state.activePhase ? "active" : ""}" onclick="setPhase('${p.id}')">${p.label} · Q${p.cost.toFixed(2)}</button>`;
   });
@@ -1190,7 +1230,6 @@ function renderQuiniela() {
     return;
   }
 
-  const pid = PLAYERS[state.selectedPlayer];
   // Verificar si ya envió picks en esta fase (todos los partidos con ganador guardado en sheets)
   const sentKey = `sent|${pid}|${state.activePhase}`;
   const alreadySent = !!state.sent?.[sentKey];
